@@ -16,6 +16,7 @@ export default function Home() {
     model: '',
     sortBy: 'drop_pct',
     minDropPct: 0,
+    platform: '',
   })
 
   const fetchListings = async () => {
@@ -29,6 +30,7 @@ export default function Home() {
       })
       if (filters.brand) params.append('brand', filters.brand)
       if (filters.model) params.append('model', filters.model)
+      if (filters.platform) params.append('platform', filters.platform)
 
       const response = await fetch(`${API_URL}/api/listings?${params}`)
       const data = await response.json()
