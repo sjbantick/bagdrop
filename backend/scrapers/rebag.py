@@ -6,6 +6,7 @@ Condition and color are encoded in product tags.
 import json
 import re
 from typing import Optional, Tuple
+from config import settings
 from models import Platform
 from scrapers.base import BaseScraper
 
@@ -46,6 +47,10 @@ class RebagScraper(BaseScraper):
         "bottega",
         "saint-laurent",
         "fendi",
+    ]
+    SEEDED_PRIORITY_HANDLES = [
+        # User-verified live PDP that was missing from feed discovery.
+        "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601",
     ]
 
     # Condition map from Rebag tags/variant titles
@@ -111,6 +116,21 @@ class RebagScraper(BaseScraper):
         # Rebag title is typically just the model name, vendor is the brand
         model = title.strip()
         return brand, model
+
+    def _configured_priority_handles(self) -> list[str]:
+        configured = [
+            handle.strip()
+            for handle in re.split(r"[\n,]", settings.rebag_priority_handles or "")
+            if handle.strip()
+        ]
+        merged: list[str] = []
+        seen: set[str] = set()
+        for handle in [*configured, *self.SEEDED_PRIORITY_HANDLES]:
+            if handle in seen:
+                continue
+            merged.append(handle)
+            seen.add(handle)
+        return merged
 
     async def fetch_json(self, url: str) -> Optional[dict]:
         text = await self.fetch(url)
@@ -450,9 +470,40 @@ class RebagScraper(BaseScraper):
 
         return total_found, total_new, total_updated, False
 
+    async def _run_priority_handle_backfill(self, discovered_handles: set[str]) -> tuple[int, int, int]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+
+        for handle in self._configured_priority_handles():
+            if not handle or handle in discovered_handles:
+                continue
+            discovered_handles.add(handle)
+            try:
+                product = await self.fetch_product_json(handle)
+                if not product:
+                    continue
+                found, is_new = await self._process_product(product)
+                if not found:
+                    continue
+                total_found += 1
+                if is_new:
+                    total_new += 1
+                else:
+                    total_updated += 1
+            except Exception as e:
+                print(f"[Rebag] Error processing priority handle {handle}: {e}")
+                continue
+
+        return total_found, total_new, total_updated
+
     async def scrape(self) -> int:
         self.begin_scrape_run()
         total_found, total_new, total_updated, discovered_handles, bulk_complete = await self._run_bulk_collection()
+        priority_found, priority_new, priority_updated = await self._run_priority_handle_backfill(discovered_handles)
+        total_found += priority_found
+        total_new += priority_new
+        total_updated += priority_updated
         supplemental_found, supplemental_new, supplemental_updated, supplemental_failed = await self._run_supplemental_collections(
             discovered_handles
         )

@@ -34,6 +34,7 @@ from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # 
 from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
 from scrapers.cosette import CosetteScraper  # noqa: E402
+from scrapers.fashionphile import FashionphileScraper  # noqa: E402
 from scrapers.realreal import RealRealScraper  # noqa: E402
 from scrapers.rebag import RebagScraper  # noqa: E402
 from scrapers.thepurseaffair import ThePurseAffairScraper  # noqa: E402
@@ -329,6 +330,36 @@ async def test_rebag_sitemap_discovery_hydrates_missing_handles():
     assert "recent-handle" in discovered_handles
 
 
+@pytest.mark.anyio
+async def test_rebag_priority_handle_backfill_hydrates_seeded_handle():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = ["priority-handle"]
+    discovered_handles = set()
+
+    async def fake_fetch_product_json(handle):
+        assert handle == "priority-handle"
+        return {
+            "id": 999,
+            "title": "Priority Bag",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $2,000</p>",
+            "vendor": "Chanel",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "1200.00", "title": "Good | Item # 9 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag-priority.jpg"}],
+        }
+
+    scraper.fetch_product_json = fake_fetch_product_json
+
+    found, new, updated = await scraper._run_priority_handle_backfill(discovered_handles)
+
+    assert found == 1
+    assert new == 1
+    assert updated == 0
+    assert "priority-handle" in discovered_handles
+
+
 def test_rebag_select_historical_sitemaps_spreads_across_older_ranges():
     session = make_session()
     scraper = RebagScraper(session)
@@ -422,6 +453,43 @@ async def test_rebag_priority_historical_pass_prefers_brand_handles():
     assert new == 2
     assert updated == 0
     assert fetched[0] == "handbags-chanel-priority-handle"
+
+
+@pytest.mark.anyio
+async def test_fashionphile_scrape_skips_tombstone_on_partial_run():
+    session = make_session()
+    scraper = FashionphileScraper(session)
+    deactivated = {"count": 0}
+    calls = {"count": 0}
+
+    async def fake_fetch_json(url):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {
+                "products": [{
+                    "id": i,
+                    "vendor": "Chanel",
+                    "title": f"Classic Flap {i}",
+                    "handle": f"classic-flap-{i}",
+                    "tags": ["good"],
+                    "body_html": "<p>Bag</p>",
+                    "variants": [{"price": "5000.00", "compare_at_price": "7000.00"}],
+                    "images": [{"src": "https://cdn.example.com/fashionphile.jpg"}],
+                } for i in range(250)]
+            }
+        return None
+
+    def fake_deactivate():
+        deactivated["count"] += 1
+        return 10
+
+    scraper.fetch_json = fake_fetch_json
+    scraper.deactivate_missing_listings = fake_deactivate
+
+    result = await scraper.scrape()
+
+    assert result == 250
+    assert deactivated["count"] == 0
 
 
 def test_cosette_extracts_discounted_live_bag():
@@ -566,6 +634,7 @@ async def test_vestiaire_uses_browser_fallback_when_api_blocked():
 async def test_rebag_scrape_fails_loudly_on_zero_result_run():
     session = make_session()
     scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = []
 
     async def fake_bulk():
         return 0, 0, 0, set(), False
@@ -590,6 +659,7 @@ async def test_rebag_scrape_fails_loudly_on_zero_result_run():
 async def test_rebag_scrape_skips_tombstone_on_partial_run():
     session = make_session()
     scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = []
     deactivated = {"count": 0}
 
     async def fake_bulk():

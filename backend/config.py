@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     vestiaire_affiliate_query: str = ""
     fashionphile_affiliate_query: str = ""
     rebag_affiliate_query: str = ""
+    rebag_priority_handles: str = ""
     watch_token_secret: str = "bagdrop-dev-watch-secret"
     alert_from_email: str = ""
     alert_reply_to: str = ""

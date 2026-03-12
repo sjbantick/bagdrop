@@ -51,17 +51,24 @@ class FashionphileScraper(BaseScraper):
         total_updated = 0
         total_found = 0
         page = 1
+        completed_inventory_pass = False
         self.begin_scrape_run()
 
         while True:
             url = f"{self.base_url}/collections/handbags/products.json?limit=250&page={page}"
             data = await self.fetch_json(url)
 
-            if not data or not data.get("products"):
+            if not data:
+                print(f"[Fashionphile] Collection fetch failed on page {page}")
+                break
+
+            if not data.get("products"):
+                completed_inventory_pass = True
                 break
 
             products = data["products"]
             if not products:
+                completed_inventory_pass = True
                 break
 
             for product in products:
@@ -117,11 +124,24 @@ class FashionphileScraper(BaseScraper):
                     continue
 
             if len(products) < 250:
+                completed_inventory_pass = True
                 break  # Last page
 
             page += 1
 
-        deactivated = self.deactivate_missing_listings()
+        if total_found == 0:
+            self.fail_scrape(
+                error="[Fashionphile] No qualifying listings found — fetch likely rate-limited or source contract changed",
+                listings_found=0,
+                listings_new=0,
+                listings_updated=0,
+            )
+
+        deactivated = 0
+        if completed_inventory_pass:
+            deactivated = self.deactivate_missing_listings()
+        else:
+            print("[Fashionphile] Skipping tombstone because the inventory pass was incomplete")
 
         self.log_scrape(
             success=True,
