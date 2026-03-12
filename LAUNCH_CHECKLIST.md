@@ -94,13 +94,11 @@ The repo now contains:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/ops-check.yml`
-- `.github/workflows/vercel-frontend.yml`
 
 Configure these in GitHub after production URLs are stable:
 
 ```text
 Secret: BAGDROP_OPS_URL=https://api.bagdrop.xyz/api/admin/ops-summary
-Secret: VERCEL_TOKEN=<vercel-personal-or-team-token>
 Variable (optional): BAGDROP_REQUIRE_CLICKS=true
 ```
 
@@ -108,7 +106,7 @@ Expected behavior:
 
 - `CI` runs on pushes to `main` and pull requests
 - `Ops Check` runs every 6 hours and on manual dispatch
-- `Vercel Frontend` can deploy production from GitHub without a local CLI session
+- Vercel's native GitHub integration deploys the frontend on pushes to `main`
 
 ## 5. Monetization Activation
 
@@ -163,4 +161,4 @@ Launch only if all of the following are true:
 - production deployment completion
 - domain routing
 - live affiliate params
-- GitHub secret for the production ops URL
+- SMTP credentials for watch alerts and intelligence digests

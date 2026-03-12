@@ -57,7 +57,7 @@ BagDrop is past the bare-MVP scaffold stage. The backend, scrapers, scheduler, f
 - [x] `npm run build` in `frontend/`
 - [x] `python3 scripts/check_ops.py --url ...` against a mock ops endpoint
 - [x] GitHub Actions workflows added for CI and scheduled ops checks
-- [x] GitHub Actions workflow added for Vercel frontend deployment
+- [x] Native Vercel GitHub integration connected for frontend deploys
 - [x] Launch checklist captured in `LAUNCH_CHECKLIST.md`
 
 ## Biggest Remaining Gaps

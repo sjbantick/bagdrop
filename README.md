@@ -266,16 +266,16 @@ The scheduler can also run both loops automatically in production:
 - `INTELLIGENCE_DIGEST_MINUTE_UTC=0`
 
 ### GitHub Actions
-The repo now includes three GitHub Actions workflows:
+The repo now includes two GitHub Actions workflows:
 
 - `CI` runs backend tests, backend bytecode compilation, and the production frontend build on pushes to `main` and on pull requests.
 - `Ops Check` runs every 6 hours and on demand. It uses the standard-library script above against a live deployment once `BAGDROP_OPS_URL` is configured in GitHub Actions secrets.
-- `Vercel Frontend` can deploy the production Next.js app from GitHub once `VERCEL_TOKEN` is configured.
+
+Frontend production deploys are handled by Vercel's native GitHub integration rather than GitHub Actions.
 
 Recommended GitHub configuration after deployment:
 ```text
 Secret: BAGDROP_OPS_URL=https://api.bagdrop.xyz/api/admin/ops-summary
-Secret: VERCEL_TOKEN=<vercel-personal-or-team-token>
 Variable (optional): BAGDROP_REQUIRE_CLICKS=true
 ```
 
@@ -345,6 +345,7 @@ npm start
 - [x] GitHub Actions CI workflow
 - [x] Scheduled GitHub Actions ops check scaffold
 - [x] Backend deployed to Railway public URL
+- [x] Frontend deploys through native Vercel GitHub integration
 - [ ] Frontend domain cutover pending custom-domain access
 
 ### Price Intelligence ⏳
