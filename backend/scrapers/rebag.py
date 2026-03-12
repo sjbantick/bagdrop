@@ -27,7 +27,7 @@ class RebagScraper(BaseScraper):
         "unique-chanel-bags",
     ]
     BULK_MAX_PAGES = 60
-    SUPPLEMENTAL_MAX_PAGES = 8
+    SUPPLEMENTAL_MAX_PAGES = 4
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -54,7 +54,14 @@ class RebagScraper(BaseScraper):
                 pass
         return None
 
-    def _parse_condition(self, tags: list, variant_title: str) -> str:
+    def _coerce_tags(self, tags: list | str | None) -> list[str]:
+        if isinstance(tags, list):
+            return [str(tag).strip() for tag in tags if str(tag).strip()]
+        if isinstance(tags, str):
+            return [tag.strip() for tag in tags.split(",") if tag.strip()]
+        return []
+
+    def _parse_condition(self, tags: list[str], variant_title: str) -> str:
         """Extract condition from tags or variant title"""
         # Check variant title first (e.g., "Very Good | Item # 414915/1 / White Gold")
         if variant_title:
@@ -71,7 +78,7 @@ class RebagScraper(BaseScraper):
                     return val
         return "good"
 
-    def _parse_color(self, tags: list) -> Optional[str]:
+    def _parse_color(self, tags: list[str]) -> Optional[str]:
         """Extract color from exterior-color-* tags"""
         for tag in tags:
             if tag.startswith("exterior-color-"):
@@ -95,10 +102,12 @@ class RebagScraper(BaseScraper):
         except json.JSONDecodeError:
             return None
 
-    async def fetch_collection_page(self, collection: str, page: int) -> list[dict]:
+    async def fetch_collection_page(self, collection: str, page: int) -> tuple[Optional[list[dict]], bool]:
         url = f"{self.base_url}/collections/{collection}/products.json?limit=250&page={page}"
         data = await self.fetch_json(url)
-        return data.get("products", []) if data else []
+        if not data or "products" not in data:
+            return None, True
+        return data.get("products", []), False
 
     async def fetch_product_json(self, handle: str) -> Optional[dict]:
         data = await self.fetch_json(f"{self.base_url}/products/{handle}.json")
@@ -112,7 +121,7 @@ class RebagScraper(BaseScraper):
         return has_bag_tag or "bag" in lowered or "clutch" in lowered
 
     def _extract_listing(self, product: dict) -> Optional[dict]:
-        tags = product.get("tags", [])
+        tags = self._coerce_tags(product.get("tags", []))
         title = product.get("title", "")
         if not self._is_bag_product(tags, title):
             return None
@@ -168,15 +177,20 @@ class RebagScraper(BaseScraper):
         is_new = self._save_extracted_listing(extracted)
         return True, is_new
 
-    async def _run_bulk_collection(self) -> tuple[int, int, int, set[str]]:
+    async def _run_bulk_collection(self) -> tuple[int, int, int, set[str], bool]:
         total_found = 0
         total_new = 0
         total_updated = 0
         discovered_handles: set[str] = set()
+        completed_inventory_pass = False
 
         for page in range(1, self.BULK_MAX_PAGES + 1):
-            products = await self.fetch_collection_page(self.BULK_COLLECTION, page)
+            products, failed = await self.fetch_collection_page(self.BULK_COLLECTION, page)
+            if failed:
+                print(f"[Rebag] Bulk collection fetch failed on page {page}")
+                break
             if not products:
+                completed_inventory_pass = True
                 break
 
             for product in products:
@@ -197,18 +211,24 @@ class RebagScraper(BaseScraper):
                     continue
 
             if len(products) < 250:
+                completed_inventory_pass = True
                 break
 
-        return total_found, total_new, total_updated, discovered_handles
+        return total_found, total_new, total_updated, discovered_handles, completed_inventory_pass
 
-    async def _run_supplemental_collections(self, discovered_handles: set[str]) -> tuple[int, int, int]:
+    async def _run_supplemental_collections(self, discovered_handles: set[str]) -> tuple[int, int, int, bool]:
         total_found = 0
         total_new = 0
         total_updated = 0
+        failed = False
 
         for collection in self.SUPPLEMENTAL_COLLECTIONS:
             for page in range(1, self.SUPPLEMENTAL_MAX_PAGES + 1):
-                products = await self.fetch_collection_page(collection, page)
+                products, page_failed = await self.fetch_collection_page(collection, page)
+                if page_failed:
+                    failed = True
+                    print(f"[Rebag] Supplemental collection '{collection}' fetch failed on page {page}")
+                    break
                 if not products:
                     break
 
@@ -237,19 +257,34 @@ class RebagScraper(BaseScraper):
                 if len(products) < 250:
                     break
 
-        return total_found, total_new, total_updated
+        return total_found, total_new, total_updated, failed
 
     async def scrape(self) -> int:
         self.begin_scrape_run()
-        total_found, total_new, total_updated, discovered_handles = await self._run_bulk_collection()
-        supplemental_found, supplemental_new, supplemental_updated = await self._run_supplemental_collections(
+        total_found, total_new, total_updated, discovered_handles, bulk_complete = await self._run_bulk_collection()
+        supplemental_found, supplemental_new, supplemental_updated, supplemental_failed = await self._run_supplemental_collections(
             discovered_handles
         )
         total_found += supplemental_found
         total_new += supplemental_new
         total_updated += supplemental_updated
 
-        deactivated = self.deactivate_missing_listings()
+        if total_found == 0:
+            self.fail_scrape(
+                error="[Rebag] No qualifying listings found — fetch likely rate-limited or source contract changed",
+                listings_found=0,
+                listings_new=0,
+                listings_updated=0,
+            )
+
+        deactivated = 0
+        if bulk_complete and not supplemental_failed:
+            deactivated = self.deactivate_missing_listings()
+        else:
+            print(
+                "[Rebag] Skipping tombstone because the inventory pass was incomplete "
+                f"(bulk_complete={bulk_complete}, supplemental_failed={supplemental_failed})"
+            )
 
         self.log_scrape(
             success=True,
