@@ -230,32 +230,24 @@ class VestiaireScraper(BaseScraper):
                 )
                 page = await context.new_page()
 
-                result_future = asyncio.get_running_loop().create_future()
-
-                async def handle_response(response):
-                    if not response.url.startswith(self.browser_api_url) or result_future.done():
-                        return
-                    try:
-                        data = await response.json()
-                        result_future.set_result(data.get("items", []))
-                    except Exception as exc:
-                        result_future.set_exception(exc)
-
-                page.on("response", handle_response)
-                await page.goto(
-                    self.browser_search_base.format(page=page_num),
-                    wait_until="networkidle",
+                async with page.expect_response(
+                    lambda response: response.url.startswith(self.browser_api_url),
                     timeout=max(self.http_client.timeout.connect * 1000, 30000),
-                )
-                products = await asyncio.wait_for(
-                    result_future,
-                    timeout=max(self.http_client.timeout.connect, 30),
-                )
+                ) as response_info:
+                    await page.goto(
+                        self.browser_search_base.format(page=page_num),
+                        wait_until="domcontentloaded",
+                        timeout=max(self.http_client.timeout.connect * 1000, 30000),
+                    )
+
+                response = await response_info.value
+                data = await response.json()
+                products = data.get("items", [])
                 await context.close()
                 await browser.close()
                 return products
         except Exception as e:
-            print(f"[Vestiaire] Browser scrape failed on page {page_num}: {e}")
+            print(f"[Vestiaire] Browser scrape failed on page {page_num}: {repr(e)}")
             return []
 
     async def scrape(self) -> int:
