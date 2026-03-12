@@ -33,6 +33,11 @@ from utils import market_path, slugify_text  # noqa: E402
 from datetime import datetime, timedelta
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
 def make_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
