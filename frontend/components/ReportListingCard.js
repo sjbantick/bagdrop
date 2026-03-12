@@ -46,7 +46,8 @@ export default function ReportListingCard({ listingId }) {
       <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Trust Signal</p>
       <h2 className="text-xl font-semibold text-stone-900">Seen this bag sold already?</h2>
       <p className="mt-3 text-sm leading-7 text-stone-600">
-        Report dead listings and BagDrop will quarantine suspicious inventory faster than the scrape loop alone.
+        If this listing is already gone, flag it here and BagDrop will quarantine stale inventory faster than the
+        scrape loop alone.
       </p>
 
       <button

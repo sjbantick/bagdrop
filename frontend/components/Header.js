@@ -12,7 +12,7 @@ export default function Header({ stats }) {
             </h1>
           </Link>
           <p className="mt-0.5 pr-2 text-[11px] leading-4 text-stone-500 sm:text-xs">
-            real-time luxury resale price drops
+            live luxury bag markdown intelligence
           </p>
         </div>
 

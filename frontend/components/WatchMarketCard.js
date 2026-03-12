@@ -53,8 +53,7 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
       <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Watch This Market</p>
       <h2 className="text-xl font-semibold text-stone-900">Get the next meaningful drop</h2>
       <p className="mt-3 text-sm leading-7 text-stone-600">
-        BagDrop is already capturing watch intent and alert delivery, so this market can turn into a real retention loop
-        instead of a one-time click.
+        Get an email when fresh inventory lands in this market instead of checking resale sites manually.
       </p>
       <p className="mt-3 text-sm text-stone-500">
         Current market size: <span className="font-medium text-stone-900">{listingCount}</span> live listings
@@ -78,7 +77,7 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
           disabled={isSubmitting}
           className="inline-flex w-full items-center justify-center rounded-full bg-pink-500 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
-          {isSubmitting ? 'Saving watch…' : `Watch ${brand} ${model}`}
+          {isSubmitting ? 'Saving watch…' : `Email me this market`}
         </button>
       </form>
 

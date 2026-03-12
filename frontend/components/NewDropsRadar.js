@@ -14,7 +14,7 @@ export default function NewDropsRadar({ opportunities = [] }) {
           <h2 className="text-2xl font-semibold text-stone-900">Fresh listings that matter right now</h2>
         </div>
         <p className="hidden max-w-md text-right text-sm text-stone-500 md:block">
-          Ranked by freshness, markdown strength, and live market context instead of raw chronology.
+          Fresh listings ranked by urgency, markdown strength, and market context instead of raw chronology.
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export default function NewDropsRadar({ opportunities = [] }) {
 
               <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-stone-500">{opportunity.market_platform_count} platforms in market</span>
-                <span className="text-stone-500">Open listing</span>
+                <span className="text-stone-500">See why it matters</span>
               </div>
             </Link>
           )

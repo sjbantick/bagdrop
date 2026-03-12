@@ -14,7 +14,7 @@ export default function FeaturedMarkets({ markets = [] }) {
           <h2 className="text-2xl font-semibold text-stone-900">Most active handbag markets</h2>
         </div>
         <p className="hidden max-w-md text-right text-sm text-stone-500 md:block">
-          Canonical pages BagDrop can rank and share instead of dropping users straight onto marketplace inventory.
+          Canonical market pages where users can compare live supply before leaving BagDrop for a marketplace listing.
         </p>
       </div>
 

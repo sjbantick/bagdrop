@@ -14,8 +14,7 @@ export default function ArbitrageRadar({ opportunities = [] }) {
           <h2 className="text-2xl font-semibold text-stone-950">Listings mispriced versus their live market</h2>
         </div>
         <p className="text-sm text-stone-500 max-w-md text-right hidden md:block">
-          This is the first real BagDrop intelligence layer: same-model listings that are materially below their live
-          market average across platforms.
+          Same-model listings sitting materially below the live BagDrop market average across platforms.
         </p>
       </div>
 
@@ -67,7 +66,7 @@ export default function ArbitrageRadar({ opportunities = [] }) {
                 <span className="text-stone-500">
                   Listing drop: <span className="text-pink-600">-{formatPercent(listing.drop_pct)}</span>
                 </span>
-                <span className="text-stone-500">Open listing</span>
+                <span className="text-stone-500">Review listing</span>
               </div>
             </Link>
           )
