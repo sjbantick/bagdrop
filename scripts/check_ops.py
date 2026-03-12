@@ -53,6 +53,16 @@ def main() -> int:
     platforms = summary.get("platforms", [])
     stale = [platform for platform in platforms if platform.get("stale")]
     failed = [platform for platform in platforms if platform.get("last_run_success") is False]
+    failed_critical = [
+        platform
+        for platform in failed
+        if platform.get("stale") or (platform.get("active_listings") or 0) == 0
+    ]
+    failed_degraded = [
+        platform
+        for platform in failed
+        if platform not in failed_critical
+    ]
     total_clicks = summary.get("total_outbound_clicks_24h", 0)
 
     print("BagDrop ops summary")
@@ -78,6 +88,12 @@ def main() -> int:
             f"clicks_24h={platform.get('outbound_clicks_24h', 0)}"
         )
 
+    if failed_degraded:
+        print(
+            "- degraded platforms: "
+            + ", ".join(platform.get("platform", "unknown") for platform in failed_degraded)
+        )
+
     if stale:
         print(
             "ops check failed: stale platforms -> "
@@ -86,10 +102,10 @@ def main() -> int:
         )
         return 1
 
-    if failed:
+    if failed_critical:
         print(
-            "ops check failed: latest run failed for -> "
-            + ", ".join(platform.get("platform", "unknown") for platform in failed),
+            "ops check failed: critical latest run failures for -> "
+            + ", ".join(platform.get("platform", "unknown") for platform in failed_critical),
             file=sys.stderr,
         )
         return 1
