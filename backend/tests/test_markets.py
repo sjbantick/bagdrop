@@ -258,6 +258,53 @@ def test_rebag_extract_listing_handles_string_tags_from_pdp_json():
     assert extracted["color"] == "Black"
 
 
+@pytest.mark.anyio
+async def test_rebag_sitemap_discovery_hydrates_missing_handles():
+    session = make_session()
+    scraper = RebagScraper(session)
+    discovered_handles = {"already-known"}
+
+    async def fake_fetch_text(url):
+        if url.endswith("/sitemap.xml"):
+            return """
+            <sitemapindex>
+              <sitemap><loc>https://shop.rebag.com/sitemap_products_26.xml</loc></sitemap>
+            </sitemapindex>
+            """
+        if url.endswith("sitemap_products_26.xml"):
+            return """
+            <urlset>
+              <url><loc>https://shop.rebag.com/products/already-known</loc></url>
+              <url><loc>https://shop.rebag.com/products/handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601</loc></url>
+            </urlset>
+            """
+        return None
+
+    async def fake_fetch_product_json(handle):
+        assert handle == "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601"
+        return {
+            "id": 8426678485169,
+            "title": "Classic Double Flap Bag Quilted Lambskin Medium",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $10,800</p>",
+            "vendor": "Chanel",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "5505.00", "title": "Good | Item # 3521601 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag.jpg"}],
+        }
+
+    scraper.fetch_text = fake_fetch_text
+    scraper.fetch_product_json = fake_fetch_product_json
+
+    found, new, updated, failed = await scraper._run_sitemap_discovery(discovered_handles)
+
+    assert failed is False
+    assert found == 1
+    assert new == 1
+    assert updated == 0
+    assert "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601" in discovered_handles
+
+
 def test_cosette_extracts_discounted_live_bag():
     session = make_session()
     scraper = CosetteScraper(session)
@@ -408,8 +455,13 @@ async def test_rebag_scrape_fails_loudly_on_zero_result_run():
         assert discovered_handles == set()
         return 0, 0, 0, True
 
+    async def fake_sitemap(discovered_handles):
+        assert discovered_handles == set()
+        return 0, 0, 0, False
+
     scraper._run_bulk_collection = fake_bulk
     scraper._run_supplemental_collections = fake_supplemental
+    scraper._run_sitemap_discovery = fake_sitemap
 
     with pytest.raises(RuntimeError, match="No qualifying listings found"):
         await scraper.scrape()
@@ -428,12 +480,17 @@ async def test_rebag_scrape_skips_tombstone_on_partial_run():
         assert discovered_handles == {"handle-1"}
         return 0, 0, 0, True
 
+    async def fake_sitemap(discovered_handles):
+        assert discovered_handles == {"handle-1"}
+        return 0, 0, 0, False
+
     def fake_deactivate():
         deactivated["count"] += 1
         return 99
 
     scraper._run_bulk_collection = fake_bulk
     scraper._run_supplemental_collections = fake_supplemental
+    scraper._run_sitemap_discovery = fake_sitemap
     scraper.deactivate_missing_listings = fake_deactivate
 
     result = await scraper.scrape()

@@ -28,6 +28,8 @@ class RebagScraper(BaseScraper):
     ]
     BULK_MAX_PAGES = 60
     SUPPLEMENTAL_MAX_PAGES = 4
+    SITEMAP_RECENT_COUNT = 3
+    SITEMAP_PRODUCT_LIMIT = 150
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -114,6 +116,20 @@ class RebagScraper(BaseScraper):
         if not data:
             return None
         return data.get("product")
+
+    async def fetch_text(self, url: str) -> Optional[str]:
+        return await self.fetch(url)
+
+    def _extract_sitemap_urls(self, xml_text: str) -> list[str]:
+        return re.findall(r"<loc>(.*?)</loc>", xml_text or "")
+
+    def _extract_product_handles_from_sitemap(self, xml_text: str) -> list[str]:
+        handles: list[str] = []
+        for loc in self._extract_sitemap_urls(xml_text):
+            match = re.search(r"/products/([^<]+?)(?:\.html)?$", loc)
+            if match:
+                handles.append(match.group(1))
+        return handles
 
     def _is_bag_product(self, tags: list[str], title: str) -> bool:
         has_bag_tag = any(t in tags for t in ["handbag", "all-bags", "item-type-handbag"])
@@ -259,6 +275,55 @@ class RebagScraper(BaseScraper):
 
         return total_found, total_new, total_updated, failed
 
+    async def _run_sitemap_discovery(self, discovered_handles: set[str]) -> tuple[int, int, int, bool]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+
+        sitemap_index = await self.fetch_text(f"{self.base_url}/sitemap.xml")
+        if not sitemap_index:
+            return 0, 0, 0, True
+
+        sitemap_urls = [
+            url for url in self._extract_sitemap_urls(sitemap_index)
+            if "sitemap_products_" in url
+        ]
+        if not sitemap_urls:
+            return 0, 0, 0, True
+
+        hydrated = 0
+        for sitemap_url in sitemap_urls[-self.SITEMAP_RECENT_COUNT:]:
+            sitemap_text = await self.fetch_text(sitemap_url)
+            if not sitemap_text:
+                continue
+
+            handles = self._extract_product_handles_from_sitemap(sitemap_text)
+            for handle in reversed(handles):
+                if hydrated >= self.SITEMAP_PRODUCT_LIMIT:
+                    return total_found, total_new, total_updated, False
+                if not handle or handle in discovered_handles:
+                    continue
+
+                discovered_handles.add(handle)
+                hydrated += 1
+                try:
+                    product = await self.fetch_product_json(handle)
+                    if not product:
+                        continue
+                    found, is_new = await self._process_product(product)
+                    if not found:
+                        continue
+                    total_found += 1
+                    if is_new:
+                        total_new += 1
+                    else:
+                        total_updated += 1
+                except Exception as e:
+                    print(f"[Rebag] Error processing sitemap handle {handle}: {e}")
+                    continue
+
+        return total_found, total_new, total_updated, False
+
     async def scrape(self) -> int:
         self.begin_scrape_run()
         total_found, total_new, total_updated, discovered_handles, bulk_complete = await self._run_bulk_collection()
@@ -268,6 +333,15 @@ class RebagScraper(BaseScraper):
         total_found += supplemental_found
         total_new += supplemental_new
         total_updated += supplemental_updated
+        sitemap_found, sitemap_new, sitemap_updated, sitemap_failed = await self._run_sitemap_discovery(
+            discovered_handles
+        )
+        total_found += sitemap_found
+        total_new += sitemap_new
+        total_updated += sitemap_updated
+
+        if sitemap_failed:
+            print("[Rebag] Sitemap discovery failed or returned no sitemap index")
 
         if total_found == 0:
             self.fail_scrape(
