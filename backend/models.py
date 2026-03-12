@@ -171,6 +171,26 @@ class OutboundClick(Base):
     )
 
 
+class ListingReport(Base):
+    """User-reported listing quality issue for trust and stale inventory cleanup."""
+    __tablename__ = "listing_reports"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    listing_id = Column(String(255), nullable=False, index=True)
+    platform = Column(String(50), nullable=False, index=True)
+    reason = Column(String(50), nullable=False, index=True)
+    source = Column(String(100), nullable=False, default="unknown")
+    notes = Column(Text)
+
+    reporter_ip = Column(String(128), index=True)
+    user_agent = Column(Text)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_listing_report_listing_reason', 'listing_id', 'reason', 'created_at'),
+    )
+
+
 class WatchSubscription(Base):
     """Email-based market watch intent captured before full alerting is built."""
     __tablename__ = "watch_subscriptions"

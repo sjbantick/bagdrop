@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Header from '@/components/Header'
 import ListingCard from '@/components/ListingCard'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
+import ReportListingCard from '@/components/ReportListingCard'
 import StructuredData from '@/components/StructuredData'
 import { buildOutboundUrl, fetchApi } from '@/lib/api'
 import { buildMarketPath } from '@/lib/slug'
@@ -237,10 +238,10 @@ export default async function ListingDetailPage({ params }) {
         <div className="mt-8 grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-8">
           <PriceHistoryChart history={history} />
 
-          <section className="rounded-2xl border border-gray-800 bg-gray-950 p-5">
-            <p className="text-[11px] uppercase tracking-[0.25em] text-red-500 mb-2">Why It Matters</p>
-            <h2 className="text-xl font-semibold text-white">BagDrop context</h2>
-            <div className="mt-5 space-y-4 text-sm leading-7 text-gray-300">
+          <section className="rounded-2xl border border-stone-200 bg-[#fffaf2] p-5">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Why It Matters</p>
+            <h2 className="text-xl font-semibold text-stone-900">BagDrop context</h2>
+            <div className="mt-5 space-y-4 text-sm leading-7 text-stone-600">
               <p>
                 This page keeps the traffic and context inside BagDrop first. Users can inspect the markdown path,
                 compare the listing against similar inventory, and only then click out to the marketplace.
@@ -253,14 +254,18 @@ export default async function ListingDetailPage({ params }) {
           </section>
         </div>
 
+        <div className="mt-8">
+          <ReportListingCard listingId={listing.id} />
+        </div>
+
         {relatedListings.length > 0 && (
           <section className="mt-10">
             <div className="flex items-end justify-between gap-4 mb-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-red-500 mb-2">Related Listings</p>
-                <h2 className="text-2xl font-semibold text-white">More {listing.brand} {displayModel}</h2>
+                <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Related Listings</p>
+                <h2 className="text-2xl font-semibold text-stone-900">More {listing.brand} {displayModel}</h2>
               </div>
-              <Link href={marketPath} className="text-sm text-gray-400 hover:text-white transition-colors">
+              <Link href={marketPath} className="text-sm text-stone-500 transition-colors hover:text-stone-900">
                 Open market page
               </Link>
             </div>

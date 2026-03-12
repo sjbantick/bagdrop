@@ -21,6 +21,7 @@ from models import (
     PriceHistory,
     BagIndexSnapshot,
     OutboundClick,
+    ListingReport,
     Scrape,
     Platform,
     WatchSubscription,
@@ -251,6 +252,21 @@ class WatchSubscriptionRequest(BaseModel):
     source: str = "market_page"
 
 
+class ListingReportRequest(BaseModel):
+    reason: str = "sold"
+    source: str = "listing_detail"
+    notes: Optional[str] = None
+
+
+class ListingReportResponse(BaseModel):
+    listing_id: str
+    reason: str
+    source: str
+    report_count_7d: int
+    listing_hidden: bool
+    detail: str
+
+
 class WatchSubscriptionResponse(BaseModel):
     id: int
     email: str
@@ -313,6 +329,23 @@ def _public_listing_condition(*conditions):
         Listing.last_seen >= _public_listing_cutoff(),
         *conditions,
     )
+
+
+def _normalize_listing_report_reason(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    allowed = {"sold", "dead", "broken"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid listing report reason")
+    return normalized
+
+
+def _normalize_listing_report_notes(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized[:500]
 
 
 def _resolve_market(db: Session, brand_slug: str, model_slug: str) -> Optional[tuple[str, str]]:
@@ -1201,6 +1234,75 @@ async def track_outbound_click(
     db.commit()
 
     return RedirectResponse(url=target_url, status_code=307)
+
+
+@app.post("/api/listings/{listing_id}/report", response_model=ListingReportResponse)
+async def report_listing_issue(
+    listing_id: str,
+    payload: ListingReportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Capture dead-listing feedback and quarantine suspicious inventory quickly."""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    reason = _normalize_listing_report_reason(payload.reason)
+    source = (payload.source or "unknown").strip()[:100] or "unknown"
+    notes = _normalize_listing_report_notes(payload.notes)
+
+    report = ListingReport(
+        listing_id=listing.id,
+        platform=listing.platform,
+        reason=reason,
+        source=source,
+        notes=notes,
+        reporter_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.add(report)
+    db.flush()
+
+    report_cutoff = datetime.utcnow() - timedelta(days=7)
+    report_count_7d = (
+        db.query(func.count(ListingReport.id))
+        .filter(
+            and_(
+                ListingReport.listing_id == listing.id,
+                ListingReport.created_at >= report_cutoff,
+            )
+        )
+        .scalar()
+        or 0
+    )
+
+    stale_quarantine_cutoff = datetime.utcnow() - timedelta(
+        hours=max(settings.listing_report_stale_quarantine_hours, 1)
+    )
+    should_hide = report_count_7d >= max(settings.listing_report_auto_hide_threshold, 1) or (
+        listing.last_seen < stale_quarantine_cutoff
+    )
+
+    if should_hide and listing.is_active:
+        listing.is_active = False
+
+    db.commit()
+
+    detail = (
+        "Thanks. BagDrop hid this listing while the feed catches up."
+        if should_hide
+        else "Thanks. BagDrop logged the report and will watch this listing closely."
+    )
+
+    return ListingReportResponse(
+        listing_id=listing.id,
+        reason=reason,
+        source=source,
+        report_count_7d=report_count_7d,
+        listing_hidden=bool(should_hide),
+        detail=detail,
+    )
 
 
 @app.get("/api/admin/ops-summary", response_model=OpsSummaryResponse)

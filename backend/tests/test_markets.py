@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from main import (  # noqa: E402
+    ListingReportRequest,
     WatchSubscriptionRequest,
     _build_arbitrage_opportunities,
     _build_intelligence_brief,
@@ -18,6 +19,7 @@ from main import (  # noqa: E402
     _normalize_watch_email,
     _affiliate_query_for_platform,
     _build_outbound_target_url,
+    report_listing_issue,
     _resolve_market,
     get_listing,
     get_listings,
@@ -28,7 +30,7 @@ from alerts import deliver_watch_alerts, get_pending_watch_alerts, resolve_watch
 from config import settings  # noqa: E402
 from digest import parse_digest_recipients, render_intelligence_digest, send_intelligence_digest  # noqa: E402
 from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # noqa: E402
-from models import Base, BagIndexSnapshot, Listing, WatchAlertDelivery, WatchSubscription  # noqa: E402
+from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
 from scheduler import deactivate_stale_listings  # noqa: E402
@@ -45,6 +47,17 @@ def make_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
     return sessionmaker(bind=engine)()
+
+
+def make_request(client_host: str = "127.0.0.1", user_agent: str = "pytest"):
+    class Client:
+        host = client_host
+
+    class Request:
+        client = Client()
+        headers = {"user-agent": user_agent}
+
+    return Request()
 
 
 def test_slugify_text_normalizes_unicode_and_spacing():
@@ -298,6 +311,89 @@ async def test_subscribe_to_watchlist_creates_and_deduplicates():
     assert second.already_subscribed is True
     assert first.canonical_path == "/hermes/kelly-sellier-28"
     assert second.id == first.id
+
+
+@pytest.mark.anyio
+async def test_report_listing_issue_logs_report_without_hiding_fresh_listing():
+    session = make_session()
+    session.add(
+        Listing(
+            id="fashionphile_1",
+            platform="fashionphile",
+            platform_id="1",
+            url="https://example.com/listing/1",
+            brand="Hermès",
+            model="Kelly Sellier 28",
+            condition="excellent",
+            current_price=12000,
+            original_price=15000,
+            drop_amount=3000,
+            drop_pct=20,
+            is_active=True,
+            last_seen=datetime.utcnow(),
+        )
+    )
+    session.commit()
+
+    response = await report_listing_issue(
+        "fashionphile_1",
+        ListingReportRequest(reason="sold", source="listing_detail"),
+        make_request(),
+        session,
+    )
+
+    listing = session.query(Listing).filter(Listing.id == "fashionphile_1").one()
+    reports = session.query(ListingReport).filter(ListingReport.listing_id == "fashionphile_1").all()
+
+    assert response.listing_hidden is False
+    assert response.report_count_7d == 1
+    assert listing.is_active is True
+    assert len(reports) == 1
+
+
+@pytest.mark.anyio
+async def test_report_listing_issue_hides_listing_after_threshold():
+    session = make_session()
+    listing = Listing(
+        id="fashionphile_1",
+        platform="fashionphile",
+        platform_id="1",
+        url="https://example.com/listing/1",
+        brand="Hermès",
+        model="Kelly Sellier 28",
+        condition="excellent",
+        current_price=12000,
+        original_price=15000,
+        drop_amount=3000,
+        drop_pct=20,
+        is_active=True,
+        last_seen=datetime.utcnow(),
+    )
+    session.add(listing)
+    session.commit()
+
+    session.add(
+        ListingReport(
+            listing_id="fashionphile_1",
+            platform="fashionphile",
+            reason="sold",
+            source="listing_detail",
+        )
+    )
+    session.commit()
+
+    response = await report_listing_issue(
+        "fashionphile_1",
+        ListingReportRequest(reason="dead", source="listing_detail"),
+        make_request(client_host="127.0.0.2"),
+        session,
+    )
+
+    updated = session.query(Listing).filter(Listing.id == "fashionphile_1").one()
+
+    assert response.listing_hidden is True
+    assert response.report_count_7d == 2
+    assert updated.is_active is False
 
 
 @pytest.mark.anyio

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:3000"
     public_api_url: str = "http://localhost:8000"
     public_listing_freshness_hours: int = 12
+    listing_report_auto_hide_threshold: int = 2
+    listing_report_stale_quarantine_hours: int = 6
     outbound_utm_source: str = "bagdrop"
     realreal_affiliate_query: str = ""
     vestiaire_affiliate_query: str = ""
