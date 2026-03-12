@@ -90,23 +90,23 @@ export default function HomePageClient({
   }, [])
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-[#fffdf8]">
       <Header stats={stats} />
 
       {stats && (
-        <div className="border-b border-gray-800 bg-gray-950">
-          <div className="max-w-7xl mx-auto px-4 py-2 flex gap-8 text-xs font-mono text-gray-400">
+        <div className="border-b border-stone-200 bg-[#f8f2ea]">
+          <div className="mx-auto flex max-w-7xl gap-8 px-4 py-2 text-xs font-mono text-stone-600">
             <span>
-              <span className="text-white">{stats.total_active_listings?.toLocaleString()}</span> active drops
+              <span className="text-stone-900">{stats.total_active_listings?.toLocaleString()}</span> active drops
             </span>
             {stats.avg_drop_pct && (
               <span>
-                avg drop: <span className="text-red-400">-{stats.avg_drop_pct}%</span>
+                avg drop: <span className="text-pink-600">-{stats.avg_drop_pct}%</span>
               </span>
             )}
             {stats.biggest_drop_pct && (
               <span>
-                biggest drop: <span className="text-red-500 font-bold">-{stats.biggest_drop_pct}%</span>
+                biggest drop: <span className="font-bold text-pink-700">-{stats.biggest_drop_pct}%</span>
               </span>
             )}
           </div>
@@ -123,16 +123,16 @@ export default function HomePageClient({
 
         {loading ? (
           <div className="text-center py-16">
-            <p className="text-gray-500 font-mono text-sm animate-pulse">scanning platforms...</p>
+            <p className="text-sm font-mono animate-pulse text-stone-500">scanning platforms...</p>
           </div>
         ) : listings.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-gray-500 text-2xl mb-2">No drops found</p>
-            <p className="text-gray-600 text-sm">Scrapers are running. Check back soon.</p>
+            <p className="mb-2 text-2xl text-stone-500">No drops found</p>
+            <p className="text-sm text-stone-500">Scrapers are running. Check back soon.</p>
           </div>
         ) : (
           <>
-            <p className="text-gray-600 text-sm mb-4 font-mono">{listings.length} listings</p>
+            <p className="mb-4 text-sm font-mono text-stone-500">{listings.length} listings</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />

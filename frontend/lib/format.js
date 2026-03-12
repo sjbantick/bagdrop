@@ -36,3 +36,23 @@ export function platformLabel(platform) {
 
   return labels[platform] || platform
 }
+
+export function freshnessLabel(value) {
+  if (!value) {
+    return 'Freshness unknown'
+  }
+
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) {
+    return 'Freshness unknown'
+  }
+
+  const deltaHours = Math.max((Date.now() - timestamp.getTime()) / 3600000, 0)
+  if (deltaHours < 1) {
+    return 'Verified this hour'
+  }
+  if (deltaHours < 24) {
+    return `Verified ${Math.round(deltaHours)}h ago`
+  }
+  return `Verified ${Math.round(deltaHours / 24)}d ago`
+}

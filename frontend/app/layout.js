@@ -37,7 +37,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="bg-black text-white font-sans">
+      <body className="bg-[#fffdf8] text-stone-900 font-serif">
         {children}
       </body>
     </html>

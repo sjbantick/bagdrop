@@ -9,9 +9,9 @@
 }
 
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background-color: #fffdf8;
+  color: #171717;
+  font-family: Georgia, 'Times New Roman', serif;
 }
 
 /* Scrollbar */
@@ -20,14 +20,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #f3ede3;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #d2c5b5;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #b6a590;
 }

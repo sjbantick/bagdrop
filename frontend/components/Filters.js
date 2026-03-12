@@ -81,8 +81,8 @@ export default function Filters({ filters, setFilters }) {
             onClick={() => setFilters({ ...filters, platform: platform.value })}
             className={`px-4 py-1.5 rounded-full text-xs font-mono whitespace-nowrap transition-colors ${
               filters.platform === platform.value
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-900 border border-gray-800 text-gray-400 hover:border-gray-600'
+                ? 'bg-pink-500 text-white'
+                : 'border border-stone-300 bg-white text-stone-600 hover:border-pink-300'
             }`}
           >
             {platform.label}
@@ -98,7 +98,7 @@ export default function Filters({ filters, setFilters }) {
             value={filters.brand}
             onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
             list="brand-suggestions"
-            className="w-full bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
           />
           <datalist id="brand-suggestions">
             {brands.map((brand) => (
@@ -114,7 +114,7 @@ export default function Filters({ filters, setFilters }) {
             value={filters.model}
             onChange={(e) => setFilters({ ...filters, model: e.target.value })}
             list="model-suggestions"
-            className="w-full bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
           />
           <datalist id="model-suggestions">
             {models.map((model) => (
@@ -126,7 +126,7 @@ export default function Filters({ filters, setFilters }) {
         <select
           value={filters.sortBy}
           onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-          className="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500"
+          className="rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-pink-400 focus:outline-none"
         >
           <option value="drop_pct">Biggest % Drop</option>
           <option value="drop_amount">Biggest $ Drop</option>
@@ -140,14 +140,14 @@ export default function Filters({ filters, setFilters }) {
             placeholder="Min drop %"
             value={filters.minDropPct || ''}
             onChange={(e) => setFilters({ ...filters, minDropPct: parseFloat(e.target.value) || 0 })}
-            className="w-full bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
             min="0"
             max="100"
           />
         </div>
       </div>
 
-      <div className="mt-2 text-[11px] text-gray-600 font-mono">
+      <div className="mt-2 text-[11px] font-mono text-stone-500">
         {matchedBrand
           ? `Model suggestions loaded for ${matchedBrand}`
           : 'Select an exact brand to unlock model suggestions'}
