@@ -32,6 +32,19 @@ class RebagScraper(BaseScraper):
     SITEMAP_HISTORICAL_COUNT = 6
     SITEMAP_RECENT_PRODUCT_LIMIT = 150
     SITEMAP_HISTORICAL_PRODUCT_LIMIT = 150
+    SITEMAP_PRIORITY_PRODUCT_LIMIT = 120
+    PRIORITY_BRAND_KEYWORDS = [
+        "chanel",
+        "hermes",
+        "louis-vuitton",
+        "gucci",
+        "celine",
+        "prada",
+        "dior",
+        "bottega",
+        "saint-laurent",
+        "fendi",
+    ]
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -134,10 +147,11 @@ class RebagScraper(BaseScraper):
         return handles
 
     def _select_historical_sitemaps(self, sitemap_urls: list[str]) -> list[str]:
-        if len(sitemap_urls) <= self.SITEMAP_RECENT_COUNT:
+        recent_count = max(self.SITEMAP_RECENT_COUNT, 0)
+        if len(sitemap_urls) <= recent_count:
             return []
 
-        older = sitemap_urls[:-self.SITEMAP_RECENT_COUNT]
+        older = sitemap_urls if recent_count == 0 else sitemap_urls[:-recent_count]
         if not older:
             return []
 
@@ -162,11 +176,17 @@ class RebagScraper(BaseScraper):
             seen.add(candidate)
         return selected
 
+    def _is_priority_handle(self, handle: str) -> bool:
+        lowered = (handle or "").lower()
+        return any(keyword in lowered for keyword in self.PRIORITY_BRAND_KEYWORDS)
+
     async def _hydrate_sitemap_handles(
         self,
         sitemap_urls: list[str],
         discovered_handles: set[str],
         limit: int,
+        *,
+        priority_only: bool = False,
     ) -> tuple[int, int, int]:
         total_found = 0
         total_new = 0
@@ -183,6 +203,8 @@ class RebagScraper(BaseScraper):
                 if hydrated >= limit:
                     return total_found, total_new, total_updated
                 if not handle or handle in discovered_handles:
+                    continue
+                if priority_only and not self._is_priority_handle(handle):
                     continue
 
                 discovered_handles.add(handle)
@@ -376,6 +398,16 @@ class RebagScraper(BaseScraper):
         total_found += recent_found
         total_new += recent_new
         total_updated += recent_updated
+
+        priority_found, priority_new, priority_updated = await self._hydrate_sitemap_handles(
+            historical_sitemaps,
+            discovered_handles,
+            self.SITEMAP_PRIORITY_PRODUCT_LIMIT,
+            priority_only=True,
+        )
+        total_found += priority_found
+        total_new += priority_new
+        total_updated += priority_updated
 
         historical_found, historical_new, historical_updated = await self._hydrate_sitemap_handles(
             historical_sitemaps,

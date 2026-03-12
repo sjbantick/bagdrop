@@ -266,6 +266,7 @@ async def test_rebag_sitemap_discovery_hydrates_missing_handles():
     scraper.SITEMAP_HISTORICAL_COUNT = 1
     scraper.SITEMAP_RECENT_PRODUCT_LIMIT = 10
     scraper.SITEMAP_HISTORICAL_PRODUCT_LIMIT = 10
+    scraper.SITEMAP_PRIORITY_PRODUCT_LIMIT = 10
     discovered_handles = {"already-known"}
 
     async def fake_fetch_text(url):
@@ -340,6 +341,70 @@ def test_rebag_select_historical_sitemaps_spreads_across_older_ranges():
     assert selected[0].endswith("sitemap_products_1.xml")
     assert selected[-1].endswith("sitemap_products_8.xml")
     assert len(selected) == 4
+
+
+@pytest.mark.anyio
+async def test_rebag_priority_historical_pass_prefers_brand_handles():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SITEMAP_RECENT_COUNT = 0
+    scraper.SITEMAP_HISTORICAL_COUNT = 1
+    scraper.SITEMAP_RECENT_PRODUCT_LIMIT = 0
+    scraper.SITEMAP_PRIORITY_PRODUCT_LIMIT = 1
+    scraper.SITEMAP_HISTORICAL_PRODUCT_LIMIT = 1
+    discovered_handles = set()
+    fetched = []
+
+    async def fake_fetch_text(url):
+        if url.endswith("/sitemap.xml"):
+            return """
+            <sitemapindex>
+              <sitemap><loc>https://shop.rebag.com/sitemap_products_4.xml</loc></sitemap>
+            </sitemapindex>
+            """
+        if url.endswith("sitemap_products_4.xml"):
+            return """
+            <urlset>
+              <url><loc>https://shop.rebag.com/products/generic-handle</loc></url>
+              <url><loc>https://shop.rebag.com/products/handbags-chanel-priority-handle</loc></url>
+            </urlset>
+            """
+        return None
+
+    async def fake_fetch_product_json(handle):
+        fetched.append(handle)
+        if handle == "handbags-chanel-priority-handle":
+            return {
+                "id": 222,
+                "title": "Priority Bag",
+                "handle": handle,
+                "body_html": "<p><b>Estimated Retail Price:</b> $2,000</p>",
+                "vendor": "Chanel",
+                "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+                "variants": [{"price": "1200.00", "title": "Good | Item # 2 / Black"}],
+                "images": [{"src": "https://cdn.example.com/rebag-priority.jpg"}],
+            }
+        return {
+            "id": 333,
+            "title": "Generic Bag",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $1,000</p>",
+            "vendor": "Coach",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "800.00", "title": "Good | Item # 3 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag-generic.jpg"}],
+        }
+
+    scraper.fetch_text = fake_fetch_text
+    scraper.fetch_product_json = fake_fetch_product_json
+
+    found, new, updated, failed = await scraper._run_sitemap_discovery(discovered_handles)
+
+    assert failed is False
+    assert found == 2
+    assert new == 2
+    assert updated == 0
+    assert fetched[0] == "handbags-chanel-priority-handle"
 
 
 def test_cosette_extracts_discounted_live_bag():
