@@ -605,6 +605,35 @@ class RebagScraper(BaseScraper):
 
         return total_found, total_new, total_updated
 
+    async def hydrate_handles(self, handles: list[str]) -> tuple[int, int, int]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+        seen: set[str] = set()
+
+        for handle in handles:
+            normalized = (handle or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            try:
+                product = await self.fetch_priority_product_json(normalized)
+                if not product:
+                    continue
+                found, is_new = await self._process_product(product)
+                if not found:
+                    continue
+                total_found += 1
+                if is_new:
+                    total_new += 1
+                else:
+                    total_updated += 1
+            except Exception as e:
+                print(f"[Rebag] Error hydrating direct handle {normalized}: {e}")
+                continue
+
+        return total_found, total_new, total_updated
+
     async def scrape(self) -> int:
         self.begin_scrape_run()
         total_found = 0

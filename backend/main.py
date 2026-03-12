@@ -29,6 +29,7 @@ from models import (
 )
 from config import settings
 from scheduler import create_scheduler, run_all_scrapers, run_scraper
+from scrapers.rebag import RebagScraper
 from utils import market_path, slugify_text
 
 scheduler = create_scheduler()
@@ -311,6 +312,14 @@ class IntelligenceBriefResponse(BaseModel):
     arbitrage: List[ArbitrageOpportunityResponse]
     new_drops: List[NewDropOpportunityResponse]
     bag_index_movers: List[BagIndexResponse]
+
+
+class AdminHydrationResponse(BaseModel):
+    platform: str
+    requested_handles: int
+    listings_found: int
+    listings_new: int
+    listings_updated: int
 
 
 def _round_float(value: Optional[float], digits: int = 1) -> Optional[float]:
@@ -1622,6 +1631,31 @@ async def trigger_scrape(
     else:
         background_tasks.add_task(run_all_scrapers)
         return {"status": "scrape_started", "platform": "all"}
+
+
+@app.post("/api/admin/rebag/hydrate", response_model=AdminHydrationResponse)
+async def hydrate_rebag_handles(
+    handles: str = Query(..., min_length=1, description="Comma or newline separated Rebag product handles"),
+    _: None = Depends(_require_ops_access),
+    db: Session = Depends(get_db),
+):
+    requested_handles = [handle.strip() for handle in re.split(r"[\n,]", handles) if handle.strip()]
+    if not requested_handles:
+        raise HTTPException(status_code=400, detail="No valid Rebag handles provided")
+
+    scraper = RebagScraper(db)
+    try:
+        found, new, updated = await scraper.hydrate_handles(requested_handles)
+    finally:
+        await scraper.close()
+
+    return AdminHydrationResponse(
+        platform="rebag",
+        requested_handles=len(requested_handles),
+        listings_found=found,
+        listings_new=new,
+        listings_updated=updated,
+    )
 
 
 if __name__ == "__main__":

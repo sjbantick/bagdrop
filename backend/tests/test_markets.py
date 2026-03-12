@@ -25,6 +25,7 @@ from main import (  # noqa: E402
     get_listing,
     get_listings,
     get_ops_summary,
+    hydrate_rebag_handles,
     subscribe_to_watchlist,
 )
 from alerts import deliver_watch_alerts, get_pending_watch_alerts, resolve_watch_unsubscribe_token  # noqa: E402
@@ -801,6 +802,67 @@ async def test_rebag_scrape_runs_priority_lanes_before_bulk():
 
     assert result == 3
     assert order == ["priority", "suggest", "bulk", "supplemental", "sitemap"]
+
+
+@pytest.mark.anyio
+async def test_rebag_hydrate_handles_fetches_distinct_priority_pdps():
+    session = make_session()
+    scraper = RebagScraper(session)
+    fetched = []
+
+    async def fake_fetch_priority_product_json(handle):
+        fetched.append(handle)
+        if handle == "missing-handle":
+            return None
+        return {
+            "id": 3003 if handle == "handle-a" else 3004,
+            "title": "Classic Double Flap Bag Quilted Lambskin Medium",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $10,800</p>",
+            "vendor": "Chanel",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "5505.00", "title": "Good | Item # 3521601 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag-search.jpg"}],
+        }
+
+    scraper.fetch_priority_product_json = fake_fetch_priority_product_json
+
+    found, new, updated = await scraper.hydrate_handles(["handle-a", "handle-a", "missing-handle", "handle-b"])
+
+    assert found == 2
+    assert new == 2
+    assert updated == 0
+    assert fetched == ["handle-a", "missing-handle", "handle-b"]
+
+
+@pytest.mark.anyio
+async def test_hydrate_rebag_handles_endpoint_returns_counts(monkeypatch):
+    session = make_session()
+
+    class DummyScraper:
+        def __init__(self, db):
+            assert db is session
+
+        async def hydrate_handles(self, handles):
+            assert handles == ["handle-a", "handle-b"]
+            return 2, 1, 1
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr("main.RebagScraper", DummyScraper)
+
+    response = await hydrate_rebag_handles(
+        handles="handle-a,\nhandle-b",
+        _=None,
+        db=session,
+    )
+
+    assert response.platform == "rebag"
+    assert response.requested_handles == 2
+    assert response.listings_found == 2
+    assert response.listings_new == 1
+    assert response.listings_updated == 1
 
 
 def test_compute_bag_index_rows_normalizes_negative_zero_delta():
