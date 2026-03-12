@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     intelligence_digest_enabled: bool = False
     intelligence_digest_hour_utc: int = 13
     intelligence_digest_minute_utc: int = 0
+    ops_dashboard_token: str = ""
 
     # Scraping
     scraper_timeout: int = 30

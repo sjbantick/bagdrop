@@ -14,10 +14,12 @@ export const metadata = {
 }
 
 const OPS_DASHBOARD_TOKEN = process.env.OPS_DASHBOARD_TOKEN?.trim() || ''
+const IS_DEVELOPMENT = process.env.NODE_ENV !== 'production'
 
 async function getOpsSummary() {
   try {
-    return await fetchApi('/api/admin/ops-summary')
+    const tokenQuery = OPS_DASHBOARD_TOKEN ? `?token=${encodeURIComponent(OPS_DASHBOARD_TOKEN)}` : ''
+    return await fetchApi(`/api/admin/ops-summary${tokenQuery}`)
   } catch {
     return null
   }
@@ -25,7 +27,8 @@ async function getOpsSummary() {
 
 async function getTopClicks() {
   try {
-    return await fetchApi('/api/admin/clicks/top?days=7&limit=6')
+    const tokenQuery = OPS_DASHBOARD_TOKEN ? `&token=${encodeURIComponent(OPS_DASHBOARD_TOKEN)}` : ''
+    return await fetchApi(`/api/admin/clicks/top?days=7&limit=6${tokenQuery}`)
   } catch {
     return null
   }
@@ -40,7 +43,7 @@ function formatDateTime(value) {
 }
 
 export default async function OpsPage({ searchParams }) {
-  if (OPS_DASHBOARD_TOKEN && searchParams?.token !== OPS_DASHBOARD_TOKEN) {
+  if ((OPS_DASHBOARD_TOKEN && searchParams?.token !== OPS_DASHBOARD_TOKEN) || (!OPS_DASHBOARD_TOKEN && !IS_DEVELOPMENT)) {
     notFound()
   }
 

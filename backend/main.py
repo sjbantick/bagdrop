@@ -6,7 +6,7 @@ import re
 from typing import List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, Request
+from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
@@ -435,6 +435,21 @@ def _normalize_watch_email(email: str) -> str:
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
         raise HTTPException(status_code=400, detail="A valid email address is required")
     return normalized
+
+
+def _require_ops_access(
+    token: Optional[str] = Query(None),
+    x_ops_token: Optional[str] = Header(None, alias="x-ops-token"),
+):
+    expected = (settings.ops_dashboard_token or "").strip()
+    if not expected:
+        if settings.debug:
+            return
+        raise HTTPException(status_code=404, detail="Not found")
+
+    actual = (token or x_ops_token or "").strip()
+    if actual != expected:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def _velocity_label(score: float) -> str:
@@ -1306,7 +1321,10 @@ async def report_listing_issue(
 
 
 @app.get("/api/admin/ops-summary", response_model=OpsSummaryResponse)
-async def get_ops_summary(db: Session = Depends(get_db)):
+async def get_ops_summary(
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_ops_access),
+):
     """Minimal operations summary for scraper freshness, failures, and click activity."""
     now = datetime.utcnow()
     stale_after_hours = max(settings.scraper_interval_hours * 2, 6)
@@ -1417,6 +1435,7 @@ async def get_top_clicks(
     days: int = Query(7, ge=1, le=90),
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
+    _: None = Depends(_require_ops_access),
 ):
     """Top outbound-clicked listings and markets for monetization visibility."""
     return _build_top_clicks(db, days=days, limit=limit)
@@ -1545,6 +1564,7 @@ async def run_intelligence_digest(dry_run: bool = Query(True), db: Session = Dep
 async def trigger_scrape(
     background_tasks: BackgroundTasks,
     platform: Optional[str] = Query(None, description="Specific platform to scrape (or all if omitted)"),
+    _: None = Depends(_require_ops_access),
 ):
     """Manually trigger a scrape run"""
     if platform:
