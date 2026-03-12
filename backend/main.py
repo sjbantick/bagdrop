@@ -1058,6 +1058,7 @@ async def recompute_bag_index(
     min_active_listings: int = Query(2, ge=1, le=20),
     persist: bool = Query(True),
     db: Session = Depends(get_db),
+    _: None = Depends(_require_ops_access),
 ):
     """Recompute current brand-level BagIndex values and optionally persist snapshots."""
     rows = (
@@ -1310,23 +1311,57 @@ async def report_listing_issue(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
 
+    now = datetime.utcnow()
     reason = _normalize_listing_report_reason(payload.reason)
     source = (payload.source or "unknown").strip()[:100] or "unknown"
     notes = _normalize_listing_report_notes(payload.notes)
+    reporter_ip = _extract_client_ip(request)
+    user_agent = request.headers.get("user-agent")
 
-    report = ListingReport(
-        listing_id=listing.id,
-        platform=listing.platform,
-        reason=reason,
-        source=source,
-        notes=notes,
-        reporter_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
+    if reporter_ip:
+        daily_limit_cutoff = now - timedelta(hours=24)
+        daily_ip_reports = (
+            db.query(func.count(ListingReport.id))
+            .filter(
+                and_(
+                    ListingReport.reporter_ip == reporter_ip,
+                    ListingReport.created_at >= daily_limit_cutoff,
+                )
+            )
+            .scalar()
+            or 0
+        )
+        if daily_ip_reports >= max(settings.listing_report_ip_daily_limit, 1):
+            raise HTTPException(status_code=429, detail="Too many listing reports from this IP")
+
+    dedupe_cutoff = now - timedelta(hours=max(settings.listing_report_dedupe_hours, 1))
+    recent_duplicate_query = db.query(ListingReport).filter(
+        and_(
+            ListingReport.listing_id == listing.id,
+            ListingReport.reason == reason,
+            ListingReport.created_at >= dedupe_cutoff,
+        )
     )
-    db.add(report)
-    db.flush()
+    if reporter_ip:
+        recent_duplicate_query = recent_duplicate_query.filter(ListingReport.reporter_ip == reporter_ip)
+    elif user_agent:
+        recent_duplicate_query = recent_duplicate_query.filter(ListingReport.user_agent == user_agent)
+    recent_duplicate = recent_duplicate_query.order_by(desc(ListingReport.created_at)).first()
 
-    report_cutoff = datetime.utcnow() - timedelta(days=7)
+    if not recent_duplicate:
+        report = ListingReport(
+            listing_id=listing.id,
+            platform=listing.platform,
+            reason=reason,
+            source=source,
+            notes=notes,
+            reporter_ip=reporter_ip,
+            user_agent=user_agent,
+        )
+        db.add(report)
+        db.flush()
+
+    report_cutoff = now - timedelta(days=7)
     report_count_7d = (
         db.query(func.count(ListingReport.id))
         .filter(
@@ -1339,7 +1374,7 @@ async def report_listing_issue(
         or 0
     )
 
-    stale_quarantine_cutoff = datetime.utcnow() - timedelta(
+    stale_quarantine_cutoff = now - timedelta(
         hours=max(settings.listing_report_stale_quarantine_hours, 1)
     )
     should_hide = report_count_7d >= max(settings.listing_report_auto_hide_threshold, 1) or (
@@ -1354,7 +1389,11 @@ async def report_listing_issue(
     detail = (
         "Thanks. BagDrop hid this listing while the feed catches up."
         if should_hide
-        else "Thanks. BagDrop logged the report and will watch this listing closely."
+        else (
+            "Thanks. BagDrop already logged this report recently and will keep watching the listing."
+            if recent_duplicate
+            else "Thanks. BagDrop logged the report and will watch this listing closely."
+        )
     )
 
     return ListingReportResponse(
@@ -1594,6 +1633,7 @@ async def run_watchlist_alerts(
     limit_subscriptions: Optional[int] = Query(None, ge=1, le=500),
     per_subscription_limit: int = Query(6, ge=1, le=20),
     db: Session = Depends(get_db),
+    _: None = Depends(_require_ops_access),
 ):
     """Run the watchlist alert loop immediately."""
     try:
@@ -1608,7 +1648,11 @@ async def run_watchlist_alerts(
 
 
 @app.post("/api/admin/intelligence-digest/send", response_model=IntelligenceDigestRunResponse)
-async def run_intelligence_digest(dry_run: bool = Query(True), db: Session = Depends(get_db)):
+async def run_intelligence_digest(
+    dry_run: bool = Query(True),
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_ops_access),
+):
     """Run the intelligence digest delivery immediately."""
     from digest import send_intelligence_digest
 

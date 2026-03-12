@@ -1093,14 +1093,22 @@ async def test_report_listing_issue_hides_listing_after_threshold():
     session.add(listing)
     session.commit()
 
-    session.add(
+    session.add_all([
         ListingReport(
             listing_id="fashionphile_1",
             platform="fashionphile",
             reason="sold",
             source="listing_detail",
-        )
-    )
+            reporter_ip="127.0.0.10",
+        ),
+        ListingReport(
+            listing_id="fashionphile_1",
+            platform="fashionphile",
+            reason="sold",
+            source="listing_detail",
+            reporter_ip="127.0.0.11",
+        ),
+    ])
     session.commit()
 
     response = await report_listing_issue(
@@ -1113,8 +1121,112 @@ async def test_report_listing_issue_hides_listing_after_threshold():
     updated = session.query(Listing).filter(Listing.id == "fashionphile_1").one()
 
     assert response.listing_hidden is True
-    assert response.report_count_7d == 2
+    assert response.report_count_7d == 3
     assert updated.is_active is False
+
+
+@pytest.mark.anyio
+async def test_report_listing_issue_dedupes_same_ip_within_window():
+    session = make_session()
+    session.add(
+        Listing(
+            id="fashionphile_1",
+            platform="fashionphile",
+            platform_id="1",
+            url="https://example.com/listing/1",
+            brand="Hermès",
+            model="Kelly Sellier 28",
+            condition="excellent",
+            current_price=12000,
+            original_price=15000,
+            drop_amount=3000,
+            drop_pct=20,
+            is_active=True,
+            last_seen=datetime.utcnow(),
+        )
+    )
+    session.commit()
+
+    first = await report_listing_issue(
+        "fashionphile_1",
+        ListingReportRequest(reason="sold", source="listing_detail"),
+        make_request(client_host="127.0.0.1"),
+        session,
+    )
+    second = await report_listing_issue(
+        "fashionphile_1",
+        ListingReportRequest(reason="sold", source="listing_detail"),
+        make_request(client_host="127.0.0.1"),
+        session,
+    )
+
+    reports = session.query(ListingReport).filter(ListingReport.listing_id == "fashionphile_1").all()
+
+    assert first.report_count_7d == 1
+    assert second.report_count_7d == 1
+    assert second.listing_hidden is False
+    assert "already logged" in second.detail
+    assert len(reports) == 1
+
+
+@pytest.mark.anyio
+async def test_report_listing_issue_rate_limits_by_ip():
+    session = make_session()
+    original_limit = settings.listing_report_ip_daily_limit
+    settings.listing_report_ip_daily_limit = 1
+    try:
+        session.add_all([
+            Listing(
+                id="fashionphile_1",
+                platform="fashionphile",
+                platform_id="1",
+                url="https://example.com/listing/1",
+                brand="Hermès",
+                model="Kelly Sellier 28",
+                condition="excellent",
+                current_price=12000,
+                original_price=15000,
+                drop_amount=3000,
+                drop_pct=20,
+                is_active=True,
+                last_seen=datetime.utcnow(),
+            ),
+            Listing(
+                id="fashionphile_2",
+                platform="fashionphile",
+                platform_id="2",
+                url="https://example.com/listing/2",
+                brand="Chanel",
+                model="Classic Flap",
+                condition="good",
+                current_price=7000,
+                original_price=9000,
+                drop_amount=2000,
+                drop_pct=22.2,
+                is_active=True,
+                last_seen=datetime.utcnow(),
+            ),
+        ])
+        session.commit()
+
+        await report_listing_issue(
+            "fashionphile_1",
+            ListingReportRequest(reason="sold", source="listing_detail"),
+            make_request(client_host="127.0.0.9"),
+            session,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await report_listing_issue(
+                "fashionphile_2",
+                ListingReportRequest(reason="sold", source="listing_detail"),
+                make_request(client_host="127.0.0.9"),
+                session,
+            )
+
+        assert exc.value.status_code == 429
+    finally:
+        settings.listing_report_ip_daily_limit = original_limit
 
 
 @pytest.mark.anyio
