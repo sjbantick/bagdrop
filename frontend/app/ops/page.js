@@ -2,6 +2,7 @@ import Header from '@/components/Header'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, platformLabel } from '@/lib/format'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 export const metadata = {
   title: 'Ops',
@@ -11,6 +12,8 @@ export const metadata = {
     follow: false,
   },
 }
+
+const OPS_DASHBOARD_TOKEN = process.env.OPS_DASHBOARD_TOKEN?.trim() || ''
 
 async function getOpsSummary() {
   try {
@@ -36,7 +39,11 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString()
 }
 
-export default async function OpsPage() {
+export default async function OpsPage({ searchParams }) {
+  if (OPS_DASHBOARD_TOKEN && searchParams?.token !== OPS_DASHBOARD_TOKEN) {
+    notFound()
+  }
+
   const [summary, topClicks] = await Promise.all([getOpsSummary(), getTopClicks()])
   const stalePlatforms = summary?.platforms.filter((platform) => platform.stale).length ?? 0
 

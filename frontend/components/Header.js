@@ -21,9 +21,6 @@ export default function Header({ stats }) {
           <Link href="/intel" className="hidden text-stone-500 transition-colors hover:text-stone-900 md:block">
             intel
           </Link>
-          <Link href="/ops" className="hidden text-stone-500 transition-colors hover:text-stone-900 md:block">
-            ops
-          </Link>
           {stats?.total_active_listings > 0 && (
             <span className="hidden text-stone-500 sm:block">
               {stats.total_active_listings.toLocaleString()} listings
