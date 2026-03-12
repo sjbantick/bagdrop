@@ -10,7 +10,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, Req
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import desc, and_, func
+from sqlalchemy import desc, and_, func, or_
 from sqlalchemy.orm import Session
 
 from alerts import build_watch_unsubscribe_url, deliver_watch_alerts, resolve_watch_unsubscribe_token
@@ -452,8 +452,6 @@ def _require_ops_access(
 ):
     expected = (settings.ops_dashboard_token or "").strip()
     if not expected:
-        if settings.debug:
-            return
         raise HTTPException(status_code=404, detail="Not found")
 
     actual = (token or x_ops_token or "").strip()
@@ -1335,18 +1333,27 @@ async def report_listing_issue(
             raise HTTPException(status_code=429, detail="Too many listing reports from this IP")
 
     dedupe_cutoff = now - timedelta(hours=max(settings.listing_report_dedupe_hours, 1))
-    recent_duplicate_query = db.query(ListingReport).filter(
-        and_(
-            ListingReport.listing_id == listing.id,
-            ListingReport.reason == reason,
-            ListingReport.created_at >= dedupe_cutoff,
-        )
-    )
+    duplicate_matchers = []
     if reporter_ip:
-        recent_duplicate_query = recent_duplicate_query.filter(ListingReport.reporter_ip == reporter_ip)
-    elif user_agent:
-        recent_duplicate_query = recent_duplicate_query.filter(ListingReport.user_agent == user_agent)
-    recent_duplicate = recent_duplicate_query.order_by(desc(ListingReport.created_at)).first()
+        duplicate_matchers.append(ListingReport.reporter_ip == reporter_ip)
+    if user_agent:
+        duplicate_matchers.append(ListingReport.user_agent == user_agent)
+
+    recent_duplicate = None
+    if duplicate_matchers:
+        recent_duplicate = (
+            db.query(ListingReport)
+            .filter(
+                and_(
+                    ListingReport.listing_id == listing.id,
+                    ListingReport.reason == reason,
+                    ListingReport.created_at >= dedupe_cutoff,
+                    or_(*duplicate_matchers),
+                )
+            )
+            .order_by(desc(ListingReport.created_at))
+            .first()
+        )
 
     if not recent_duplicate:
         report = ListingReport(
