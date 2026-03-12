@@ -1,7 +1,6 @@
 import { fetchApi } from '@/lib/api'
 import { buildMarketPath } from '@/lib/slug'
-
-const SITE_URL = 'https://bagdrop.xyz'
+import { SITE_URL } from '@/lib/site'
 const LISTING_PAGE_SIZE = 500
 const MAX_LISTING_PAGES = 20
 
