@@ -9,11 +9,13 @@ from config import settings
 from intelligence import persist_bag_index_snapshots
 from models import Listing
 from scrapers import (
+    CosetteScraper,
     FashionphileScraper,
     LuxeDHScraper,
     MadisonAvenueCoutureScraper,
     RealRealScraper,
     RebagScraper,
+    ThePurseAffairScraper,
     VestiaireScraper,
     YoogiScraper,
 )
@@ -54,6 +56,10 @@ async def run_all_scrapers():
         scrapers.append(VestiaireScraper(db))
     if settings.enable_yoogi:
         scrapers.append(YoogiScraper(db))
+    if settings.enable_cosette:
+        scrapers.append(CosetteScraper(db))
+    if settings.enable_thepurseaffair:
+        scrapers.append(ThePurseAffairScraper(db))
     if settings.enable_luxedh:
         scrapers.append(LuxeDHScraper(db))
     if settings.enable_madisonavenuecouture:
@@ -159,6 +165,8 @@ async def run_scraper(platform: str) -> int:
         "rebag": RebagScraper,
         "vestiaire": VestiaireScraper,
         "yoogi": YoogiScraper,
+        "cosette": CosetteScraper,
+        "thepurseaffair": ThePurseAffairScraper,
         "luxedh": LuxeDHScraper,
         "madisonavenuecouture": MadisonAvenueCoutureScraper,
     }

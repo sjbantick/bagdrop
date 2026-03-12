@@ -33,6 +33,8 @@ export function platformLabel(platform) {
     realreal: 'The RealReal',
     vestiaire: 'Vestiaire',
     yoogi: "Yoogi's Closet",
+    cosette: 'Cosette',
+    thepurseaffair: 'The Purse Affair',
     luxedh: 'LuxeDH',
     madisonavenuecouture: 'Madison Avenue Couture',
   }

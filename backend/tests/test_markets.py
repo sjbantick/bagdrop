@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import sys
 
 import pytest
@@ -32,7 +33,9 @@ from digest import parse_digest_recipients, render_intelligence_digest, send_int
 from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # noqa: E402
 from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
+from scrapers.cosette import CosetteScraper  # noqa: E402
 from scrapers.rebag import RebagScraper  # noqa: E402
+from scrapers.thepurseaffair import ThePurseAffairScraper  # noqa: E402
 from scrapers.yoogi import YoogiScraper  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
 from scheduler import deactivate_stale_listings  # noqa: E402
@@ -251,6 +254,62 @@ def test_rebag_extract_listing_handles_string_tags_from_pdp_json():
     assert extracted is not None
     assert extracted["condition"] == "good"
     assert extracted["color"] == "Black"
+
+
+def test_cosette_extracts_discounted_live_bag():
+    session = make_session()
+    scraper = CosetteScraper(session)
+    product = {
+        "id": 2698714382436,
+        "title": "Givenchy Antigona Envelope Black Leather Clutch",
+        "handle": "cartable",
+        "body_html": "<p>Colour: Black</p><p>Please refer to photos for condition. This is an ex-display product.</p>",
+        "vendor": "Givenchy",
+        "tags": [
+            "bag",
+            "bags",
+            "black",
+            "designers",
+            "givenchy",
+            "handbag",
+            "handbags",
+            "inhouse",
+            "perfectimperfection",
+            "sale",
+        ],
+        "variants": [{"price": "975.00", "compare_at_price": "1950.00"}],
+        "images": [{"src": "https://cdn.example.com/cosette.jpg"}],
+    }
+
+    extracted = scraper._parse_model_from_title(product["title"], product["vendor"])
+
+    assert extracted == "Antigona Envelope Black Leather Clutch"
+    assert scraper._parse_condition(product["tags"], "Colour: Black. ex-display product") == "excellent"
+    assert scraper._parse_color(product["tags"], product["title"], "Colour: Black") == "Black"
+
+
+def test_the_purse_affair_extracts_available_discounted_bag():
+    session = make_session()
+    scraper = ThePurseAffairScraper(session)
+    product = {
+        "id": 8146349687066,
+        "title": "Chanel Gabrielle Large Black",
+        "handle": "13261-chanel-gabrielle-large-black",
+        "body_html": (
+            "<p><strong>Condition:</strong> 9.3/10 Immaculate Condition - some nail marks throughout</p>"
+            "<p><strong>Colour:</strong> Black</p>"
+        ),
+        "vendor": "CHANEL",
+        "tags": ["available", "Black", "Chanel", "shoulder"],
+        "variants": [{"price": "6370.00", "compare_at_price": "7000.00"}],
+        "images": [{"src": "https://cdn.example.com/tpa.jpg"}],
+    }
+
+    body_text = re.sub(r"<[^>]+>", " ", product["body_html"])
+
+    assert scraper._parse_model_from_title(product["title"], product["vendor"]) == "Gabrielle Large Black"
+    assert scraper._parse_condition(body_text) == "excellent"
+    assert scraper._parse_color(product["tags"], body_text) == "Black"
 
 
 @pytest.mark.anyio

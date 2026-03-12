@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     enable_fashionphile: bool = True
     enable_rebag: bool = True
     enable_yoogi: bool = True
+    enable_cosette: bool = True
+    enable_thepurseaffair: bool = True
     enable_luxedh: bool = False
     enable_madisonavenuecouture: bool = False
 

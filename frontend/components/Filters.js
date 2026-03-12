@@ -9,6 +9,9 @@ const PLATFORMS = [
   { value: 'rebag', label: 'Rebag' },
   { value: 'realreal', label: 'The RealReal' },
   { value: 'vestiaire', label: 'Vestiaire' },
+  { value: 'yoogi', label: "Yoogi's Closet" },
+  { value: 'cosette', label: 'Cosette' },
+  { value: 'thepurseaffair', label: 'The Purse Affair' },
 ]
 
 export default function Filters({ filters, setFilters }) {

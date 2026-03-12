@@ -22,6 +22,8 @@ class Platform(str, Enum):
     FASHIONPHILE = "fashionphile"
     REBAG = "rebag"
     YOOGI = "yoogi"
+    COSETTE = "cosette"
+    THE_PURSE_AFFAIR = "thepurseaffair"
     LUXEDH = "luxedh"
     MADISON_AVENUE_COUTURE = "madisonavenuecouture"
 
