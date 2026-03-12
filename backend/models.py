@@ -166,6 +166,7 @@ class OutboundClick(Base):
     target_url = Column(String(2000), nullable=False)
     referer = Column(String(2000))
     user_agent = Column(Text)
+    client_ip = Column(String(128), index=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 

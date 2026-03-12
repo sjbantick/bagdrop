@@ -1,6 +1,7 @@
 import Header from '@/components/Header'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, platformLabel } from '@/lib/format'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -16,19 +17,32 @@ export const metadata = {
 const OPS_DASHBOARD_TOKEN = process.env.OPS_DASHBOARD_TOKEN?.trim() || ''
 const IS_DEVELOPMENT = process.env.NODE_ENV !== 'production'
 
-async function getOpsSummary() {
+async function getOpsSummary(excludeIp) {
   try {
-    const tokenQuery = OPS_DASHBOARD_TOKEN ? `?token=${encodeURIComponent(OPS_DASHBOARD_TOKEN)}` : ''
-    return await fetchApi(`/api/admin/ops-summary${tokenQuery}`)
+    const params = new URLSearchParams()
+    if (OPS_DASHBOARD_TOKEN) {
+      params.set('token', OPS_DASHBOARD_TOKEN)
+    }
+    if (excludeIp) {
+      params.set('exclude_ips', excludeIp)
+    }
+    const query = params.toString()
+    return await fetchApi(`/api/admin/ops-summary${query ? `?${query}` : ''}`)
   } catch {
     return null
   }
 }
 
-async function getTopClicks() {
+async function getTopClicks(excludeIp) {
   try {
-    const tokenQuery = OPS_DASHBOARD_TOKEN ? `&token=${encodeURIComponent(OPS_DASHBOARD_TOKEN)}` : ''
-    return await fetchApi(`/api/admin/clicks/top?days=7&limit=6${tokenQuery}`)
+    const params = new URLSearchParams({ days: '7', limit: '6' })
+    if (OPS_DASHBOARD_TOKEN) {
+      params.set('token', OPS_DASHBOARD_TOKEN)
+    }
+    if (excludeIp) {
+      params.set('exclude_ips', excludeIp)
+    }
+    return await fetchApi(`/api/admin/clicks/top?${params.toString()}`)
   } catch {
     return null
   }
@@ -47,7 +61,13 @@ export default async function OpsPage({ searchParams }) {
     notFound()
   }
 
-  const [summary, topClicks] = await Promise.all([getOpsSummary(), getTopClicks()])
+  const headerStore = headers()
+  const forwardedFor = headerStore.get('x-forwarded-for') || ''
+  const currentIp = forwardedFor.split(',')[0]?.trim() || headerStore.get('x-real-ip') || ''
+  const manualExcludeIp = searchParams?.exclude_ip?.trim?.() || ''
+  const excludedIp = manualExcludeIp || currentIp
+
+  const [summary, topClicks] = await Promise.all([getOpsSummary(excludedIp), getTopClicks(excludedIp)])
   const stalePlatforms = summary?.platforms.filter((platform) => platform.stale).length ?? 0
 
   return (
@@ -64,6 +84,11 @@ export default async function OpsPage({ searchParams }) {
                 This page replaces the old Paperclip board for day-to-day operating visibility. It shows scraper
                 freshness, recent failures, live listing counts, and whether outbound click intent is actually flowing.
               </p>
+              {excludedIp && (
+                <p className="mt-3 text-sm text-gray-400">
+                  Traffic metrics below exclude your IP: <span className="font-mono text-gray-200">{excludedIp}</span>
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 xl:min-w-[620px]">

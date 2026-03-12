@@ -1112,6 +1112,52 @@ def test_build_top_clicks_summarizes_listings_and_markets():
     assert summary.contexts[0].click_count == 2
 
 
+def test_build_top_clicks_excludes_internal_ip_traffic():
+    session = make_session()
+    now = datetime.utcnow()
+    session.add(
+        Listing(
+            id="fashionphile_1",
+            platform="fashionphile",
+            platform_id="1",
+            url="https://example.com/listing/1",
+            brand="Chanel",
+            model="Classic Flap",
+            condition="excellent",
+            current_price=7000,
+            is_active=True,
+        )
+    )
+    session.flush()
+    session.add_all([
+        OutboundClick(
+            listing_id="fashionphile_1",
+            platform="fashionphile",
+            surface="listing_card",
+            context="feed",
+            target_url="https://example.com/listing/1",
+            client_ip="198.51.100.10",
+            created_at=now - timedelta(hours=2),
+        ),
+        OutboundClick(
+            listing_id="fashionphile_1",
+            platform="fashionphile",
+            surface="listing_card",
+            context="feed",
+            target_url="https://example.com/listing/1",
+            client_ip="203.0.113.20",
+            created_at=now - timedelta(hours=1),
+        ),
+    ])
+    session.commit()
+
+    summary = _build_top_clicks(session, days=7, limit=5, excluded_ips=["198.51.100.10"])
+
+    assert summary.listings[0].click_count == 1
+    assert summary.platforms[0].click_count == 1
+    assert summary.contexts[0].click_count == 1
+
+
 @pytest.mark.anyio
 async def test_run_watch_alert_job_skips_when_smtp_missing():
     original_from = settings.alert_from_email

@@ -452,6 +452,36 @@ def _require_ops_access(
         raise HTTPException(status_code=404, detail="Not found")
 
 
+def _extract_client_ip(request: Optional[Request]) -> Optional[str]:
+    if not request:
+        return None
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+
+    for header in ["cf-connecting-ip", "x-real-ip"]:
+        value = (request.headers.get(header) or "").strip()
+        if value:
+            return value
+
+    return getattr(getattr(request, "client", None), "host", None)
+
+
+def _normalize_ip_list(values: Optional[str]) -> List[str]:
+    if not values:
+        return []
+    return [item.strip() for item in values.split(",") if item.strip()]
+
+
+def _apply_outbound_ip_exclusion(query, excluded_ips: List[str]):
+    if not excluded_ips:
+        return query
+    return query.filter(~OutboundClick.client_ip.in_(excluded_ips))
+
+
 def _velocity_label(score: float) -> str:
     if score >= 75:
         return "hot"
@@ -707,8 +737,10 @@ def _build_top_clicks(
     *,
     days: int = 7,
     limit: int = 10,
+    excluded_ips: Optional[List[str]] = None,
 ) -> TopClicksResponse:
     cutoff = datetime.utcnow() - timedelta(days=days)
+    excluded_ips = excluded_ips or []
 
     listing_rows = (
         db.query(
@@ -721,6 +753,7 @@ def _build_top_clicks(
         )
         .join(Listing, Listing.id == OutboundClick.listing_id)
         .filter(OutboundClick.created_at >= cutoff)
+        .filter(~OutboundClick.client_ip.in_(excluded_ips) if excluded_ips else True)
         .group_by(
             OutboundClick.listing_id,
             Listing.brand,
@@ -741,6 +774,7 @@ def _build_top_clicks(
         )
         .join(Listing, Listing.id == OutboundClick.listing_id)
         .filter(OutboundClick.created_at >= cutoff)
+        .filter(~OutboundClick.client_ip.in_(excluded_ips) if excluded_ips else True)
         .group_by(Listing.brand, Listing.model)
         .order_by(desc(func.count(OutboundClick.id)), Listing.brand, Listing.model)
         .limit(limit)
@@ -756,6 +790,7 @@ def _build_top_clicks(
         )
         .join(Listing, Listing.id == OutboundClick.listing_id)
         .filter(OutboundClick.created_at >= cutoff)
+        .filter(~OutboundClick.client_ip.in_(excluded_ips) if excluded_ips else True)
         .group_by(Listing.platform)
         .order_by(desc(func.count(OutboundClick.id)), Listing.platform)
         .limit(limit)
@@ -771,6 +806,7 @@ def _build_top_clicks(
         )
         .join(Listing, Listing.id == OutboundClick.listing_id)
         .filter(OutboundClick.created_at >= cutoff)
+        .filter(~OutboundClick.client_ip.in_(excluded_ips) if excluded_ips else True)
         .group_by(OutboundClick.surface)
         .order_by(desc(func.count(OutboundClick.id)), OutboundClick.surface)
         .limit(limit)
@@ -789,6 +825,7 @@ def _build_top_clicks(
                 OutboundClick.context != "",
             )
         )
+        .filter(~OutboundClick.client_ip.in_(excluded_ips) if excluded_ips else True)
         .group_by(OutboundClick.context)
         .order_by(desc(func.count(OutboundClick.id)), OutboundClick.context)
         .limit(limit)
@@ -1244,6 +1281,7 @@ async def track_outbound_click(
         target_url=target_url,
         referer=request.headers.get("referer"),
         user_agent=request.headers.get("user-agent"),
+        client_ip=_extract_client_ip(request),
     )
     db.add(click)
     db.commit()
@@ -1321,26 +1359,36 @@ async def report_listing_issue(
 
 
 @app.get("/api/admin/ops-summary", response_model=OpsSummaryResponse)
-async def get_ops_summary(
+async def get_ops_summary_route(
+    request: Request,
     db: Session = Depends(get_db),
     _: None = Depends(_require_ops_access),
+):
+    exclude_ips = _normalize_ip_list(request.query_params.get("exclude_ips"))
+    return await get_ops_summary(db, exclude_ips=exclude_ips)
+
+
+async def get_ops_summary(
+    db: Session,
+    *,
+    exclude_ips: Optional[List[str]] = None,
 ):
     """Minimal operations summary for scraper freshness, failures, and click activity."""
     now = datetime.utcnow()
     stale_after_hours = max(settings.scraper_interval_hours * 2, 6)
     stale_cutoff = now - timedelta(hours=stale_after_hours)
     click_cutoff = now - timedelta(hours=24)
+    excluded_ips = exclude_ips or []
     platforms: List[PlatformOpsResponse] = []
     digest_recipient_count = len(
         [item.strip() for item in settings.intelligence_digest_recipients.split(",") if item.strip()]
     )
 
-    total_outbound_clicks_24h = (
+    total_clicks_query = (
         db.query(func.count(OutboundClick.id))
         .filter(OutboundClick.created_at >= click_cutoff)
-        .scalar()
-        or 0
     )
+    total_outbound_clicks_24h = _apply_outbound_ip_exclusion(total_clicks_query, excluded_ips).scalar() or 0
     active_watch_subscriptions = (
         db.query(func.count(WatchSubscription.id))
         .filter(WatchSubscription.is_active == True)
@@ -1378,7 +1426,7 @@ async def get_ops_summary(
             .scalar()
             or 0
         )
-        outbound_clicks_24h = (
+        platform_clicks_query = (
             db.query(func.count(OutboundClick.id))
             .filter(
                 and_(
@@ -1386,9 +1434,8 @@ async def get_ops_summary(
                     OutboundClick.created_at >= click_cutoff,
                 )
             )
-            .scalar()
-            or 0
         )
+        outbound_clicks_24h = _apply_outbound_ip_exclusion(platform_clicks_query, excluded_ips).scalar() or 0
 
         freshness_reference = None
         if latest_success and latest_success.completed_at:
@@ -1431,14 +1478,16 @@ async def get_ops_summary(
 
 
 @app.get("/api/admin/clicks/top", response_model=TopClicksResponse)
-async def get_top_clicks(
+async def get_top_clicks_route(
+    request: Request,
     days: int = Query(7, ge=1, le=90),
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     _: None = Depends(_require_ops_access),
 ):
     """Top outbound-clicked listings and markets for monetization visibility."""
-    return _build_top_clicks(db, days=days, limit=limit)
+    excluded_ips = _normalize_ip_list(request.query_params.get("exclude_ips"))
+    return _build_top_clicks(db, days=days, limit=limit, excluded_ips=excluded_ips)
 
 
 @app.post("/api/watchlists", response_model=WatchSubscriptionResponse, status_code=201)
