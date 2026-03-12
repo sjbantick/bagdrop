@@ -32,6 +32,7 @@ from digest import parse_digest_recipients, render_intelligence_digest, send_int
 from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # noqa: E402
 from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
+from scrapers.yoogi import YoogiScraper  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
 from scheduler import deactivate_stale_listings  # noqa: E402
 from utils import market_path, slugify_text  # noqa: E402
@@ -142,6 +143,60 @@ def test_affiliate_query_for_platform_renders_placeholders():
         }
     finally:
         settings.rebag_affiliate_query = original
+
+
+def test_yoogi_extract_listing_from_algolia_hit():
+    session = make_session()
+    scraper = YoogiScraper(session)
+    hit = {
+        "sku": "YG-123",
+        "url": "/123-sample-bag.html",
+        "manufacturer": "Chanel",
+        "name": "Classic Double Flap Bag Quilted Lambskin Medium",
+        "image_url": "https://cdn.example.com/bag.jpg",
+        "condition": "Gently used",
+        "regular_price": {"USD": 2950},
+        "price": {"USD": 2650},
+        "retail_price": {"USD": 8950},
+        "collection": "From 2014 Collection",
+    }
+
+    extracted = scraper._extract_listing(hit)
+
+    assert extracted is not None
+    assert extracted["platform_id"] == "YG-123"
+    assert extracted["brand"] == "Chanel"
+    assert extracted["current_price"] == 2650
+    assert extracted["original_price"] == 2950
+    assert extracted["condition"] == "good"
+    assert extracted["url"] == "https://www.yoogiscloset.com/123-sample-bag.html"
+
+
+def test_yoogi_extract_listing_prefers_usd_and_msrp():
+    session = make_session()
+    scraper = YoogiScraper(session)
+    hit = {
+        "sku": "YG-456",
+        "url": "456-sample-bag.html",
+        "product_url": "https://www.yoogiscloset.com/456-sample-bag.html",
+        "manufacturer": "Chanel",
+        "name": "Classic Small Double Flap Bag",
+        "image_url": "https://cdn.example.com/bag.jpg",
+        "condition": "Like new",
+        "price": {
+            "ARS": {"default": 999999},
+            "USD": {"default": 4200},
+        },
+        "msrp": 10800,
+    }
+
+    extracted = scraper._extract_listing(hit)
+
+    assert extracted is not None
+    assert extracted["current_price"] == 4200
+    assert extracted["original_price"] == 10800
+    assert extracted["condition"] == "excellent"
+    assert extracted["url"] == "https://www.yoogiscloset.com/456-sample-bag.html"
 
 
 def test_compute_bag_index_rows_normalizes_negative_zero_delta():

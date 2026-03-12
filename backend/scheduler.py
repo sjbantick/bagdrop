@@ -8,7 +8,15 @@ from database import SessionLocal
 from config import settings
 from intelligence import persist_bag_index_snapshots
 from models import Listing
-from scrapers import FashionphileScraper, RealRealScraper, RebagScraper, VestiaireScraper
+from scrapers import (
+    FashionphileScraper,
+    LuxeDHScraper,
+    MadisonAvenueCoutureScraper,
+    RealRealScraper,
+    RebagScraper,
+    VestiaireScraper,
+    YoogiScraper,
+)
 
 
 def deactivate_stale_listings(db, *, stale_after_hours: int | None = None) -> int:
@@ -44,6 +52,12 @@ async def run_all_scrapers():
         scrapers.append(RebagScraper(db))
     if settings.enable_vestiaire:
         scrapers.append(VestiaireScraper(db))
+    if settings.enable_yoogi:
+        scrapers.append(YoogiScraper(db))
+    if settings.enable_luxedh:
+        scrapers.append(LuxeDHScraper(db))
+    if settings.enable_madisonavenuecouture:
+        scrapers.append(MadisonAvenueCoutureScraper(db))
 
     total = 0
     for scraper in scrapers:
@@ -144,6 +158,9 @@ async def run_scraper(platform: str) -> int:
         "realreal": RealRealScraper,
         "rebag": RebagScraper,
         "vestiaire": VestiaireScraper,
+        "yoogi": YoogiScraper,
+        "luxedh": LuxeDHScraper,
+        "madisonavenuecouture": MadisonAvenueCoutureScraper,
     }
 
     scraper_cls = scraper_map.get(platform.lower())

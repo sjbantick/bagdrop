@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     enable_vestiaire: bool = True
     enable_fashionphile: bool = True
     enable_rebag: bool = True
+    enable_yoogi: bool = True
+    enable_luxedh: bool = False
+    enable_madisonavenuecouture: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

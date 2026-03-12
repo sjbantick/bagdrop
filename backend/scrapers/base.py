@@ -94,6 +94,24 @@ class BaseScraper(ABC):
         self.scrape_started_at = datetime.utcnow()
         self.seen_listing_ids = set()
 
+    def fail_scrape(
+        self,
+        *,
+        error: str,
+        listings_found: int = 0,
+        listings_new: int = 0,
+        listings_updated: int = 0,
+    ):
+        """Log a failed scrape run and raise a runtime error for scheduler visibility."""
+        self.log_scrape(
+            success=False,
+            listings_found=listings_found,
+            listings_new=listings_new,
+            listings_updated=listings_updated,
+            error=error,
+        )
+        raise RuntimeError(error)
+
     def track_seen_listing(self, platform_id: str):
         self.seen_listing_ids.add(self.build_listing_id(str(platform_id)))
 

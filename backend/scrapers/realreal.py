@@ -183,6 +183,7 @@ class RealRealScraper(BaseScraper):
         total_updated = 0
         total_found = 0
         max_pages = 20  # Cap at 20 pages to avoid overloading
+        pages_with_products = 0
 
         for page in range(1, max_pages + 1):
             search_path = self.SEARCH_URLS[0].format(page=page)
@@ -192,8 +193,10 @@ class RealRealScraper(BaseScraper):
 
             if not products:
                 if page == 1:
-                    print(f"[RealReal] No products found on page 1 — site structure may have changed")
+                    self.fail_scrape(error="[RealReal] No products found on page 1 — site structure may have changed")
                 break
+
+            pages_with_products += 1
 
             for product in products:
                 extracted = self._extract_listing_from_product(product)
@@ -210,6 +213,14 @@ class RealRealScraper(BaseScraper):
             # If we got fewer than expected, probably last page
             if len(products) < 10:
                 break
+
+        if pages_with_products > 0 and total_found == 0:
+            self.fail_scrape(
+                error="[RealReal] Parsed pages but extracted zero listings — source contract is broken",
+                listings_found=0,
+                listings_new=total_new,
+                listings_updated=total_updated,
+            )
 
         self.log_scrape(
             success=True,

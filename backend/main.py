@@ -1069,7 +1069,7 @@ async def get_featured_markets(
 async def get_arbitrage_opportunities(
     limit: int = Query(12, ge=1, le=48),
     min_market_listings: int = Query(3, ge=2, le=20),
-    min_platforms: int = Query(2, ge=2, le=4),
+    min_platforms: int = Query(2, ge=2, le=8),
     min_gap_pct: float = Query(12.0, ge=5.0, le=80.0),
     db: Session = Depends(get_db),
 ):

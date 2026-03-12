@@ -179,6 +179,7 @@ class VestiaireScraper(BaseScraper):
         total_updated = 0
         total_found = 0
         max_pages = 15
+        pages_with_products = 0
 
         for page in range(1, max_pages + 1):
             # Try API endpoint first
@@ -211,8 +212,10 @@ class VestiaireScraper(BaseScraper):
 
             if not products:
                 if page == 1:
-                    print(f"[Vestiaire] No products found on page 1 — API may have changed")
+                    self.fail_scrape(error="[Vestiaire] No products found on page 1 — API may have changed")
                 break
+
+            pages_with_products += 1
 
             for product in products:
                 extracted = self._extract_listing(product)
@@ -228,6 +231,14 @@ class VestiaireScraper(BaseScraper):
 
             if len(products) < 10:
                 break
+
+        if pages_with_products > 0 and total_found == 0:
+            self.fail_scrape(
+                error="[Vestiaire] Parsed pages but extracted zero listings — source contract is broken",
+                listings_found=0,
+                listings_new=total_new,
+                listings_updated=total_updated,
+            )
 
         self.log_scrape(
             success=True,
