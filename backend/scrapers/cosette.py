@@ -82,12 +82,15 @@ class CosetteScraper(BaseScraper):
 
             for product in products:
                 try:
+                    variant = product.get("variants", [{}])[0] if product.get("variants") else {}
+                    if not variant.get("available"):
+                        continue
+
                     tags = self._normalize_tags(product.get("tags", []))
                     lowered_tags = {tag.lower() for tag in tags}
                     if "sold out" in lowered_tags or "sold-out" in lowered_tags or "soldout" in lowered_tags:
                         continue
 
-                    variant = product.get("variants", [{}])[0] if product.get("variants") else {}
                     price_str = variant.get("price", "0") or "0"
                     compare_str = variant.get("compare_at_price")
 

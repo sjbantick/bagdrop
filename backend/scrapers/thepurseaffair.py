@@ -101,12 +101,15 @@ class ThePurseAffairScraper(BaseScraper):
 
             for product in products:
                 try:
-                    tags = self._normalize_tags(product.get("tags", []))
-                    lowered_tags = {tag.lower() for tag in tags}
-                    if "available" not in lowered_tags:
+                    variant = product.get("variants", [{}])[0] if product.get("variants") else {}
+                    if not variant.get("available"):
                         continue
 
-                    variant = product.get("variants", [{}])[0] if product.get("variants") else {}
+                    tags = self._normalize_tags(product.get("tags", []))
+                    lowered_tags = {tag.lower() for tag in tags}
+                    if "available" not in lowered_tags and "sold out" in lowered_tags:
+                        continue
+
                     price_str = variant.get("price", "0") or "0"
                     compare_str = variant.get("compare_at_price")
 

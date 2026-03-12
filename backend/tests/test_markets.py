@@ -582,7 +582,7 @@ def test_cosette_extracts_discounted_live_bag():
             "perfectimperfection",
             "sale",
         ],
-        "variants": [{"price": "975.00", "compare_at_price": "1950.00"}],
+        "variants": [{"price": "975.00", "compare_at_price": "1950.00", "available": True}],
         "images": [{"src": "https://cdn.example.com/cosette.jpg"}],
     }
 
@@ -606,7 +606,7 @@ def test_the_purse_affair_extracts_available_discounted_bag():
         ),
         "vendor": "CHANEL",
         "tags": ["available", "Black", "Chanel", "shoulder"],
-        "variants": [{"price": "6370.00", "compare_at_price": "7000.00"}],
+        "variants": [{"price": "6370.00", "compare_at_price": "7000.00", "available": True}],
         "images": [{"src": "https://cdn.example.com/tpa.jpg"}],
     }
 
@@ -615,6 +615,60 @@ def test_the_purse_affair_extracts_available_discounted_bag():
     assert scraper._parse_model_from_title(product["title"], product["vendor"]) == "Gabrielle Large Black"
     assert scraper._parse_condition(body_text) == "excellent"
     assert scraper._parse_color(product["tags"], body_text) == "Black"
+
+
+@pytest.mark.anyio
+async def test_cosette_skips_sold_out_variant_even_with_compare_at_price():
+    session = make_session()
+    scraper = CosetteScraper(session)
+
+    async def fake_fetch_json(url):
+        return {
+            "products": [
+                {
+                    "id": 1,
+                    "title": "Prada Galleria Leather Tote",
+                    "handle": "prada-galleria",
+                    "body_html": "<p>Colour: Black</p>",
+                    "vendor": "Prada",
+                    "tags": ["bag", "sale", "sold out"],
+                    "variants": [{"price": "2800.00", "compare_at_price": "5000.00", "available": False}],
+                    "images": [{"src": "https://cdn.example.com/cosette.jpg"}],
+                }
+            ]
+        }
+
+    scraper.fetch_json = fake_fetch_json
+
+    with pytest.raises(RuntimeError, match="No qualifying bag listings found"):
+        await scraper.scrape()
+
+
+@pytest.mark.anyio
+async def test_the_purse_affair_requires_live_variant_not_just_available_tag():
+    session = make_session()
+    scraper = ThePurseAffairScraper(session)
+
+    async def fake_fetch_json(url):
+        return {
+            "products": [
+                {
+                    "id": 1,
+                    "title": "Chanel Vintage Flap Black",
+                    "handle": "chanel-vintage-flap",
+                    "body_html": "<p><strong>Condition:</strong> 9.3/10</p><p><strong>Colour:</strong> Black</p>",
+                    "vendor": "CHANEL",
+                    "tags": ["available", "Black", "Chanel", "shoulder"],
+                    "variants": [{"price": "3890.00", "compare_at_price": "4515.00", "available": False}],
+                    "images": [{"src": "https://cdn.example.com/tpa.jpg"}],
+                }
+            ]
+        }
+
+    scraper.fetch_json = fake_fetch_json
+
+    with pytest.raises(RuntimeError, match="No qualifying bag listings found"):
+        await scraper.scrape()
 
 
 @pytest.mark.anyio
