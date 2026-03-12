@@ -436,7 +436,18 @@ def _build_outbound_target_url(listing: Listing, surface: str, context: Optional
 
 
 def _platforms_to_monitor() -> List[str]:
-    return [platform.value for platform in Platform]
+    enabled_platforms = [
+        (Platform.FASHIONPHILE, settings.enable_fashionphile),
+        (Platform.REALREAL, settings.enable_realreal),
+        (Platform.REBAG, settings.enable_rebag),
+        (Platform.VESTIAIRE, settings.enable_vestiaire),
+        (Platform.YOOGI, settings.enable_yoogi),
+        (Platform.COSETTE, settings.enable_cosette),
+        (Platform.THE_PURSE_AFFAIR, settings.enable_thepurseaffair),
+        (Platform.LUXEDH, settings.enable_luxedh),
+        (Platform.MADISON_AVENUE_COUTURE, settings.enable_madisonavenuecouture),
+    ]
+    return [platform.value for platform, enabled in enabled_platforms if enabled]
 
 
 def _normalize_watch_email(email: str) -> str:
