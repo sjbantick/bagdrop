@@ -262,25 +262,47 @@ def test_rebag_extract_listing_handles_string_tags_from_pdp_json():
 async def test_rebag_sitemap_discovery_hydrates_missing_handles():
     session = make_session()
     scraper = RebagScraper(session)
+    scraper.SITEMAP_RECENT_COUNT = 1
+    scraper.SITEMAP_HISTORICAL_COUNT = 1
+    scraper.SITEMAP_RECENT_PRODUCT_LIMIT = 10
+    scraper.SITEMAP_HISTORICAL_PRODUCT_LIMIT = 10
     discovered_handles = {"already-known"}
 
     async def fake_fetch_text(url):
         if url.endswith("/sitemap.xml"):
             return """
             <sitemapindex>
+              <sitemap><loc>https://shop.rebag.com/sitemap_products_4.xml</loc></sitemap>
               <sitemap><loc>https://shop.rebag.com/sitemap_products_26.xml</loc></sitemap>
             </sitemapindex>
             """
-        if url.endswith("sitemap_products_26.xml"):
+        if url.endswith("sitemap_products_4.xml"):
             return """
             <urlset>
               <url><loc>https://shop.rebag.com/products/already-known</loc></url>
               <url><loc>https://shop.rebag.com/products/handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601</loc></url>
             </urlset>
             """
+        if url.endswith("sitemap_products_26.xml"):
+            return """
+            <urlset>
+              <url><loc>https://shop.rebag.com/products/recent-handle</loc></url>
+            </urlset>
+            """
         return None
 
     async def fake_fetch_product_json(handle):
+        if handle == "recent-handle":
+            return {
+                "id": 111,
+                "title": "Recent Bag",
+                "handle": handle,
+                "body_html": "<p><b>Estimated Retail Price:</b> $1,200</p>",
+                "vendor": "Prada",
+                "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+                "variants": [{"price": "900.00", "title": "Good | Item # 1 / Black"}],
+                "images": [{"src": "https://cdn.example.com/rebag-recent.jpg"}],
+            }
         assert handle == "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601"
         return {
             "id": 8426678485169,
@@ -299,10 +321,25 @@ async def test_rebag_sitemap_discovery_hydrates_missing_handles():
     found, new, updated, failed = await scraper._run_sitemap_discovery(discovered_handles)
 
     assert failed is False
-    assert found == 1
-    assert new == 1
+    assert found == 2
+    assert new == 2
     assert updated == 0
     assert "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601" in discovered_handles
+    assert "recent-handle" in discovered_handles
+
+
+def test_rebag_select_historical_sitemaps_spreads_across_older_ranges():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SITEMAP_RECENT_COUNT = 2
+    scraper.SITEMAP_HISTORICAL_COUNT = 4
+    urls = [f"https://shop.rebag.com/sitemap_products_{i}.xml" for i in range(1, 11)]
+
+    selected = scraper._select_historical_sitemaps(urls)
+
+    assert selected[0].endswith("sitemap_products_1.xml")
+    assert selected[-1].endswith("sitemap_products_8.xml")
+    assert len(selected) == 4
 
 
 def test_cosette_extracts_discounted_live_bag():

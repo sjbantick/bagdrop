@@ -28,8 +28,10 @@ class RebagScraper(BaseScraper):
     ]
     BULK_MAX_PAGES = 60
     SUPPLEMENTAL_MAX_PAGES = 4
-    SITEMAP_RECENT_COUNT = 3
-    SITEMAP_PRODUCT_LIMIT = 150
+    SITEMAP_RECENT_COUNT = 6
+    SITEMAP_HISTORICAL_COUNT = 6
+    SITEMAP_RECENT_PRODUCT_LIMIT = 150
+    SITEMAP_HISTORICAL_PRODUCT_LIMIT = 150
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -130,6 +132,78 @@ class RebagScraper(BaseScraper):
             if match:
                 handles.append(match.group(1))
         return handles
+
+    def _select_historical_sitemaps(self, sitemap_urls: list[str]) -> list[str]:
+        if len(sitemap_urls) <= self.SITEMAP_RECENT_COUNT:
+            return []
+
+        older = sitemap_urls[:-self.SITEMAP_RECENT_COUNT]
+        if not older:
+            return []
+
+        count = min(self.SITEMAP_HISTORICAL_COUNT, len(older))
+        if count <= 0:
+            return []
+
+        selected: list[str] = []
+        seen: set[str] = set()
+        if count == 1:
+            candidate = older[0]
+            selected.append(candidate)
+            return selected
+
+        max_index = len(older) - 1
+        for position in range(count):
+            index = round(position * max_index / (count - 1))
+            candidate = older[index]
+            if candidate in seen:
+                continue
+            selected.append(candidate)
+            seen.add(candidate)
+        return selected
+
+    async def _hydrate_sitemap_handles(
+        self,
+        sitemap_urls: list[str],
+        discovered_handles: set[str],
+        limit: int,
+    ) -> tuple[int, int, int]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+        hydrated = 0
+
+        for sitemap_url in sitemap_urls:
+            sitemap_text = await self.fetch_text(sitemap_url)
+            if not sitemap_text:
+                continue
+
+            handles = self._extract_product_handles_from_sitemap(sitemap_text)
+            for handle in reversed(handles):
+                if hydrated >= limit:
+                    return total_found, total_new, total_updated
+                if not handle or handle in discovered_handles:
+                    continue
+
+                discovered_handles.add(handle)
+                hydrated += 1
+                try:
+                    product = await self.fetch_product_json(handle)
+                    if not product:
+                        continue
+                    found, is_new = await self._process_product(product)
+                    if not found:
+                        continue
+                    total_found += 1
+                    if is_new:
+                        total_new += 1
+                    else:
+                        total_updated += 1
+                except Exception as e:
+                    print(f"[Rebag] Error processing sitemap handle {handle}: {e}")
+                    continue
+
+        return total_found, total_new, total_updated
 
     def _is_bag_product(self, tags: list[str], title: str) -> bool:
         has_bag_tag = any(t in tags for t in ["handbag", "all-bags", "item-type-handbag"])
@@ -291,36 +365,26 @@ class RebagScraper(BaseScraper):
         if not sitemap_urls:
             return 0, 0, 0, True
 
-        hydrated = 0
-        for sitemap_url in sitemap_urls[-self.SITEMAP_RECENT_COUNT:]:
-            sitemap_text = await self.fetch_text(sitemap_url)
-            if not sitemap_text:
-                continue
+        recent_sitemaps = list(reversed(sitemap_urls[-self.SITEMAP_RECENT_COUNT:]))
+        historical_sitemaps = list(reversed(self._select_historical_sitemaps(sitemap_urls)))
 
-            handles = self._extract_product_handles_from_sitemap(sitemap_text)
-            for handle in reversed(handles):
-                if hydrated >= self.SITEMAP_PRODUCT_LIMIT:
-                    return total_found, total_new, total_updated, False
-                if not handle or handle in discovered_handles:
-                    continue
+        recent_found, recent_new, recent_updated = await self._hydrate_sitemap_handles(
+            recent_sitemaps,
+            discovered_handles,
+            self.SITEMAP_RECENT_PRODUCT_LIMIT,
+        )
+        total_found += recent_found
+        total_new += recent_new
+        total_updated += recent_updated
 
-                discovered_handles.add(handle)
-                hydrated += 1
-                try:
-                    product = await self.fetch_product_json(handle)
-                    if not product:
-                        continue
-                    found, is_new = await self._process_product(product)
-                    if not found:
-                        continue
-                    total_found += 1
-                    if is_new:
-                        total_new += 1
-                    else:
-                        total_updated += 1
-                except Exception as e:
-                    print(f"[Rebag] Error processing sitemap handle {handle}: {e}")
-                    continue
+        historical_found, historical_new, historical_updated = await self._hydrate_sitemap_handles(
+            historical_sitemaps,
+            discovered_handles,
+            self.SITEMAP_HISTORICAL_PRODUCT_LIMIT,
+        )
+        total_found += historical_found
+        total_new += historical_new
+        total_updated += historical_updated
 
         return total_found, total_new, total_updated, False
 
