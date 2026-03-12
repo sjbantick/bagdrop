@@ -18,7 +18,7 @@ export default function BagIndexBoard({ snapshots = [] }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {snapshots.map((snapshot) => {
           const tone =
             snapshot.index_value <= 80 ? 'text-red-400' :
@@ -40,7 +40,7 @@ export default function BagIndexBoard({ snapshots = [] }) {
               className="rounded-2xl border border-stone-200 bg-[#fffaf2] p-5 shadow-[0_10px_30px_rgba(194,168,140,0.08)]"
             >
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-stone-500">Brand</p>
                   <h3 className="mt-1 text-xl font-semibold text-stone-900">{titleCase(snapshot.brand)}</h3>
                   <p className={`mt-2 text-xs font-mono ${trendTone}`}>
@@ -53,7 +53,7 @@ export default function BagIndexBoard({ snapshots = [] }) {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <p className="text-stone-500">Current avg</p>
                   <p className="mt-1 font-semibold text-stone-900">{formatCurrency(snapshot.current_avg_price)}</p>

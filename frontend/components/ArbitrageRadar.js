@@ -19,7 +19,7 @@ export default function ArbitrageRadar({ opportunities = [] }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {opportunities.map((opportunity) => {
           const listing = opportunity.listing
           const detailPath = `/listings/${listing.id}`
@@ -29,20 +29,20 @@ export default function ArbitrageRadar({ opportunities = [] }) {
               href={detailPath}
               className="group rounded-2xl border border-stone-200 bg-[#f4eee6] p-5 transition-colors hover:border-pink-400"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-stone-500">{listing.brand}</p>
-                  <h3 className="mt-1 text-xl font-semibold text-stone-950 group-hover:text-pink-600">
+                  <h3 className="mt-1 text-lg font-semibold text-stone-950 group-hover:text-pink-600 sm:text-xl">
                     {titleCase(listing.model)}
                   </h3>
                   <p className="mt-2 text-xs font-mono text-stone-500">{platformLabel(listing.platform)}</p>
                 </div>
-                <div className="rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
+                <div className="w-fit shrink-0 rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
                   {opportunity.market_gap_pct}% below avg
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <p className="text-stone-500">Current ask</p>
                   <p className="mt-1 font-semibold text-stone-950">{formatCurrency(listing.current_price)}</p>
@@ -63,7 +63,7 @@ export default function ArbitrageRadar({ opportunities = [] }) {
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-stone-200 pt-4 text-xs">
+              <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-stone-500">
                   Listing drop: <span className="text-pink-600">-{formatPercent(listing.drop_pct)}</span>
                 </span>

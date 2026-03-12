@@ -76,7 +76,7 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex items-center rounded-full bg-pink-500 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center rounded-full bg-pink-500 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           {isSubmitting ? 'Saving watch…' : `Watch ${brand} ${model}`}
         </button>

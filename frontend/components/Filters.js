@@ -77,7 +77,7 @@ export default function Filters({ filters, setFilters }) {
 
   return (
     <div className="mb-6">
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {PLATFORMS.map((platform) => (
           <button
             key={platform.value}
@@ -93,7 +93,7 @@ export default function Filters({ filters, setFilters }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         <div>
           <input
             type="text"

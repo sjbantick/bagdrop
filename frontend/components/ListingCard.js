@@ -41,7 +41,7 @@ export default function ListingCard({ listing }) {
         </div>
 
         <div className="p-4">
-          <h3 className="mb-1 text-sm font-bold text-stone-900 group-hover:text-pink-500">
+          <h3 className="mb-1 text-sm font-bold leading-6 text-stone-900 group-hover:text-pink-500">
             {listing.brand} {titleCase(listing.model)}
           </h3>
 
@@ -49,7 +49,7 @@ export default function ListingCard({ listing }) {
           {listing.color && <p className="text-xs text-stone-500">{listing.color}</p>}
 
           <div className="mt-3 border-t border-stone-200 pt-3">
-            <div className="flex items-baseline justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
               <div>
                 <p className="text-2xl font-bold text-stone-900">{formatCurrency(listing.current_price)}</p>
                 {originalPrice !== listing.current_price && (
@@ -67,7 +67,7 @@ export default function ListingCard({ listing }) {
         </div>
       </Link>
 
-      <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-3 text-xs">
+      <div className="flex flex-col gap-2 border-t border-stone-200 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
         <Link href={marketPath} className="text-stone-500 transition-colors hover:text-stone-900">
           View market page
         </Link>

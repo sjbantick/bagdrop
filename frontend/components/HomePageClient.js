@@ -95,7 +95,7 @@ export default function HomePageClient({
 
       {stats && (
         <div className="border-b border-stone-200 bg-[#f8f2ea]">
-          <div className="mx-auto flex max-w-7xl gap-8 px-4 py-2 text-xs font-mono text-stone-600">
+          <div className="mx-auto flex max-w-7xl flex-wrap gap-x-6 gap-y-1 px-4 py-2 text-[11px] font-mono text-stone-600 sm:text-xs">
             <span>
               <span className="text-stone-900">{stats.total_active_listings?.toLocaleString()}</span> active drops
             </span>
@@ -113,7 +113,7 @@ export default function HomePageClient({
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
         <FeaturedMarkets markets={featuredMarkets} />
         <ArbitrageRadar opportunities={arbitrageOpportunities} />
         <BagIndexBoard snapshots={bagIndex} />
@@ -133,7 +133,7 @@ export default function HomePageClient({
         ) : (
           <>
             <p className="mb-4 text-sm font-mono text-stone-500">{listings.length} listings</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}

@@ -53,7 +53,7 @@ export default function ReportListingCard({ listingId }) {
         type="button"
         onClick={handleReport}
         disabled={isSubmitting || isHidden}
-        className="mt-5 inline-flex items-center rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-medium text-stone-700 transition-colors hover:border-pink-300 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-medium text-stone-700 transition-colors hover:border-pink-300 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         {isHidden ? 'Listing hidden from feed' : isSubmitting ? 'Reporting…' : 'Report sold / dead listing'}
       </button>

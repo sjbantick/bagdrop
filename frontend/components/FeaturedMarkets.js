@@ -8,7 +8,7 @@ export default function FeaturedMarkets({ markets = [] }) {
 
   return (
     <section className="mb-8">
-      <div className="flex items-end justify-between gap-4 mb-4">
+      <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Market Pages</p>
           <h2 className="text-2xl font-semibold text-stone-900">Most active handbag markets</h2>
@@ -18,7 +18,7 @@ export default function FeaturedMarkets({ markets = [] }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {markets.map((market) => (
           <Link
             key={market.canonical_path}
@@ -26,18 +26,18 @@ export default function FeaturedMarkets({ markets = [] }) {
             className="group rounded-2xl border border-stone-200 bg-[#f7f1e8] p-5 transition-colors hover:border-pink-300"
           >
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-stone-500">{market.brand}</p>
-                <h3 className="mt-1 text-xl font-semibold text-stone-900 group-hover:text-pink-500">
+                <h3 className="mt-1 text-lg font-semibold text-stone-900 group-hover:text-pink-500 sm:text-xl">
                   {titleCase(market.model)}
                 </h3>
               </div>
-              <div className="rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
+              <div className="shrink-0 rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
                 {market.listing_count} live
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-3 text-sm">
+            <div className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div>
                 <p className="text-stone-500">Lowest ask</p>
                 <p className="mt-1 font-semibold text-stone-900">{formatCurrency(market.lowest_price)}</p>

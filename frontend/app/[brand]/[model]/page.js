@@ -104,7 +104,7 @@ export default async function MarketPage({ params, searchParams }) {
       />
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
         {searchParams?.watch === 'unsubscribed' && (
           <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             Watch removed. You will not receive further alerts for this market.
@@ -121,11 +121,11 @@ export default async function MarketPage({ params, searchParams }) {
           <span className="text-stone-700">{displayModel}</span>
         </div>
 
-        <section className="mt-6 rounded-3xl border border-stone-200 bg-[#f7f1e8] p-6 shadow-[0_12px_40px_rgba(206,182,150,0.10)] md:p-8">
+        <section className="mt-6 rounded-3xl border border-stone-200 bg-[#f7f1e8] p-5 shadow-[0_12px_40px_rgba(206,182,150,0.10)] md:p-8">
           <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-pink-500">Canonical Market Page</p>
-              <h1 className="text-4xl font-semibold text-stone-900 md:text-5xl">
+              <h1 className="text-3xl font-semibold text-stone-900 sm:text-4xl md:text-5xl">
                 {market.brand} {displayModel}
               </h1>
               <p className="mt-4 text-base leading-8 text-stone-600 md:text-lg">
@@ -134,7 +134,7 @@ export default async function MarketPage({ params, searchParams }) {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 xl:min-w-[520px]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:min-w-[520px]">
               <div className="rounded-2xl border border-stone-200 bg-white/80 p-4">
                 <p className="text-sm text-stone-500">Live listings</p>
                 <p className="mt-2 text-3xl font-semibold text-stone-900">{market.stats.listing_count}</p>
@@ -159,7 +159,7 @@ export default async function MarketPage({ params, searchParams }) {
           </div>
         </section>
 
-        <section className="mt-8 grid grid-cols-1 xl:grid-cols-[0.75fr_1.25fr] gap-8">
+        <section className="mt-8 grid grid-cols-1 gap-8 xl:grid-cols-[0.75fr_1.25fr]">
           <div className="rounded-2xl border border-stone-200 bg-[#f7f1e8] p-5 shadow-[0_10px_30px_rgba(194,168,140,0.08)]">
             <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Platform Mix</p>
             <h2 className="text-xl font-semibold text-stone-900">Where inventory is showing up</h2>
@@ -177,7 +177,7 @@ export default async function MarketPage({ params, searchParams }) {
               ))}
             </div>
 
-            <div className="mt-6 rounded-2xl border border-stone-200 bg-white/80 p-4 text-sm leading-7 text-stone-600">
+            <div className="mt-6 rounded-2xl border border-stone-200 bg-white/80 p-4 text-sm leading-7 text-stone-600 break-words">
               <p>
                 Average ask: <span className="font-medium text-stone-900">{formatCurrency(market.stats.average_price)}</span>
               </p>
@@ -218,7 +218,7 @@ export default async function MarketPage({ params, searchParams }) {
           </div>
 
           <div>
-            <div className="flex items-end justify-between gap-4 mb-4">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Inventory</p>
                 <h2 className="text-2xl font-semibold text-stone-900">Current listings</h2>
@@ -228,7 +228,7 @@ export default async function MarketPage({ params, searchParams }) {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
               {market.listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}

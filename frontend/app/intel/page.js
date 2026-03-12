@@ -68,10 +68,10 @@ export default async function IntelligenceBriefPage() {
       />
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <section className="rounded-3xl border border-stone-200 bg-[#f4eee6] p-6 md:p-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        <section className="rounded-3xl border border-stone-200 bg-[#f4eee6] p-5 md:p-8">
           <p className="text-[11px] uppercase tracking-[0.3em] text-red-500 mb-3">BagDrop Intelligence</p>
-          <h1 className="text-4xl md:text-5xl font-semibold text-stone-950">Daily market brief</h1>
+          <h1 className="text-3xl font-semibold text-stone-950 sm:text-4xl md:text-5xl">Daily market brief</h1>
           <p className="mt-4 max-w-3xl text-base md:text-lg leading-8 text-stone-600">
             A shareable owned surface for the best BagDrop signals: mispriced listings, meaningful new drops, and brand-level
             resale pressure.

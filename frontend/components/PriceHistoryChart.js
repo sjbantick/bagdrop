@@ -23,12 +23,12 @@ export default function PriceHistoryChart({ history = [] }) {
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-[#fffaf2] p-5">
-      <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Price History</p>
           <h2 className="text-xl font-semibold text-stone-900">Observed markdown path</h2>
         </div>
-        <div className="text-right text-sm">
+        <div className="shrink-0 text-right text-sm">
           <p className="text-stone-500">Latest</p>
           <p className="font-semibold text-stone-900">{formatCurrency(latest.price)}</p>
         </div>
@@ -53,7 +53,7 @@ export default function PriceHistoryChart({ history = [] }) {
         />
       </svg>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-stone-500">
+      <div className="mt-4 flex flex-col gap-3 text-sm text-stone-500 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p>First seen</p>
           <p className="text-stone-900">{formatCurrency(earliest.price)}</p>

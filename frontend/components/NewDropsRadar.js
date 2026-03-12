@@ -18,7 +18,7 @@ export default function NewDropsRadar({ opportunities = [] }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {opportunities.map((opportunity) => {
           const listing = opportunity.listing
           return (
@@ -27,20 +27,20 @@ export default function NewDropsRadar({ opportunities = [] }) {
               href={`/listings/${listing.id}`}
               className="group rounded-2xl border border-stone-200 bg-[#fffaf2] p-5 shadow-[0_10px_30px_rgba(194,168,140,0.08)] transition-colors hover:border-pink-300"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-stone-500">{listing.brand}</p>
-                  <h3 className="mt-1 text-xl font-semibold text-stone-900 group-hover:text-pink-500">
+                  <h3 className="mt-1 text-lg font-semibold text-stone-900 group-hover:text-pink-500 sm:text-xl">
                     {titleCase(listing.model)}
                   </h3>
                   <p className="mt-2 text-xs font-mono text-stone-500">{platformLabel(listing.platform)}</p>
                 </div>
-                <div className="rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
+                <div className="w-fit shrink-0 rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-mono text-pink-600">
                   {opportunity.significance_score} score
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <p className="text-stone-500">Current ask</p>
                   <p className="mt-1 font-semibold text-stone-900">{formatCurrency(listing.current_price)}</p>
@@ -61,7 +61,7 @@ export default function NewDropsRadar({ opportunities = [] }) {
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-stone-200 pt-4 text-xs">
+              <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-stone-500">{opportunity.market_platform_count} platforms in market</span>
                 <span className="text-stone-500">Open listing</span>
               </div>
