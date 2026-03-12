@@ -360,6 +360,74 @@ async def test_rebag_priority_handle_backfill_hydrates_seeded_handle():
     assert "priority-handle" in discovered_handles
 
 
+@pytest.mark.anyio
+async def test_rebag_priority_handle_backfill_hydrates_even_if_handle_already_discovered():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = ["priority-handle"]
+    discovered_handles = {"priority-handle"}
+
+    async def fake_fetch_product_json(handle):
+        assert handle == "priority-handle"
+        return {
+            "id": 1001,
+            "title": "Priority Bag",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $2,500</p>",
+            "vendor": "Chanel",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "1500.00", "title": "Good | Item # 10 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag-priority-duplicate.jpg"}],
+        }
+
+    scraper.fetch_product_json = fake_fetch_product_json
+
+    found, new, updated = await scraper._run_priority_handle_backfill(discovered_handles)
+
+    assert found == 1
+    assert new == 1
+    assert updated == 0
+
+
+@pytest.mark.anyio
+async def test_rebag_search_suggest_backfill_hydrates_priority_queries():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = ["handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601"]
+    scraper.SEEDED_PRIORITY_QUERIES = ["chanel classic double flap"]
+    discovered_handles = {"existing-handle"}
+
+    async def fake_fetch_search_suggest_json(query):
+        assert query == "chanel classic double flap"
+        return [
+            {"handle": "existing-handle"},
+            {"handle": "search-discovered-handle"},
+        ]
+
+    async def fake_fetch_product_json(handle):
+        assert handle == "search-discovered-handle"
+        return {
+            "id": 2002,
+            "title": "Classic Double Flap Bag Quilted Lambskin Medium",
+            "handle": handle,
+            "body_html": "<p><b>Estimated Retail Price:</b> $10,800</p>",
+            "vendor": "Chanel",
+            "tags": "handbag, all-bags, item-type-handbag, exterior-color-black, good",
+            "variants": [{"price": "5505.00", "title": "Good | Item # 3521601 / Black"}],
+            "images": [{"src": "https://cdn.example.com/rebag-search.jpg"}],
+        }
+
+    scraper.fetch_search_suggest_json = fake_fetch_search_suggest_json
+    scraper.fetch_product_json = fake_fetch_product_json
+
+    found, new, updated = await scraper._run_search_suggest_backfill(discovered_handles)
+
+    assert found == 1
+    assert new == 1
+    assert updated == 0
+    assert "search-discovered-handle" in discovered_handles
+
+
 def test_rebag_select_historical_sitemaps_spreads_across_older_ranges():
     session = make_session()
     scraper = RebagScraper(session)

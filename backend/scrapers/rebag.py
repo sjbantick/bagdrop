@@ -36,6 +36,8 @@ class RebagScraper(BaseScraper):
     SITEMAP_PRIORITY_PRODUCT_LIMIT = 120
     SITEMAP_PRIORITY_SITEMAP_LIMIT = 20
     SITEMAP_PRIORITY_PER_SITEMAP_LIMIT = 8
+    SEARCH_SUGGEST_LIMIT = 10
+    SEARCH_SUGGEST_QUERY_LIMIT = 18
     PRIORITY_BRAND_KEYWORDS = [
         "chanel",
         "hermes",
@@ -51,6 +53,16 @@ class RebagScraper(BaseScraper):
     SEEDED_PRIORITY_HANDLES = [
         # User-verified live PDP that was missing from feed discovery.
         "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601",
+    ]
+    SEEDED_PRIORITY_QUERIES = [
+        "chanel classic double flap",
+        "classic double flap lambskin medium",
+        "chanel flap",
+        "hermes birkin",
+        "hermes kelly",
+        "louis vuitton monogram",
+        "dior saddle bag",
+        "celine belt bag",
     ]
 
     # Condition map from Rebag tags/variant titles
@@ -157,6 +169,24 @@ class RebagScraper(BaseScraper):
     async def fetch_text(self, url: str) -> Optional[str]:
         return await self.fetch(url)
 
+    async def fetch_search_suggest_json(self, query: str) -> list[dict]:
+        if not query:
+            return []
+        data = await self.fetch_json(
+            f"{self.base_url}/search/suggest.json"
+            f"?q={query.replace(' ', '%20')}"
+            f"&resources[type]=product"
+            f"&resources[limit]={self.SEARCH_SUGGEST_LIMIT}"
+        )
+        if not data:
+            return []
+        return (
+            data.get("resources", {})
+            .get("results", {})
+            .get("products", [])
+            or []
+        )
+
     def _extract_sitemap_urls(self, xml_text: str) -> list[str]:
         return re.findall(r"<loc>(.*?)</loc>", xml_text or "")
 
@@ -201,6 +231,36 @@ class RebagScraper(BaseScraper):
     def _is_priority_handle(self, handle: str) -> bool:
         lowered = (handle or "").lower()
         return any(keyword in lowered for keyword in self.PRIORITY_BRAND_KEYWORDS)
+
+    def _build_priority_queries(self) -> list[str]:
+        configured = [
+            query.strip()
+            for query in re.split(r"[\n,]", settings.rebag_priority_handles or "")
+            if query.strip() and " " in query.strip()
+        ]
+        derived: list[str] = []
+        for handle in self._configured_priority_handles():
+            slug = re.sub(r"\d+$", "", handle or "").replace("-", " ").strip()
+            if not slug:
+                continue
+            slug = re.sub(r"\s+", " ", slug)
+            for prefix in ("handbags ", "bag ", "bags "):
+                if slug.startswith(prefix):
+                    slug = slug[len(prefix):]
+            if slug:
+                derived.append(slug)
+
+        merged: list[str] = []
+        seen: set[str] = set()
+        for query in [*configured, *self.SEEDED_PRIORITY_QUERIES, *derived]:
+            lowered = query.lower()
+            if lowered in seen:
+                continue
+            merged.append(query)
+            seen.add(lowered)
+            if len(merged) >= self.SEARCH_SUGGEST_QUERY_LIMIT:
+                break
+        return merged
 
     def _select_priority_sitemaps(self, sitemap_urls: list[str]) -> list[str]:
         limit = min(self.SITEMAP_PRIORITY_SITEMAP_LIMIT, len(sitemap_urls))
@@ -476,7 +536,7 @@ class RebagScraper(BaseScraper):
         total_updated = 0
 
         for handle in self._configured_priority_handles():
-            if not handle or handle in discovered_handles:
+            if not handle:
                 continue
             discovered_handles.add(handle)
             try:
@@ -497,6 +557,42 @@ class RebagScraper(BaseScraper):
 
         return total_found, total_new, total_updated
 
+    async def _run_search_suggest_backfill(self, discovered_handles: set[str]) -> tuple[int, int, int]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+
+        for query in self._build_priority_queries():
+            try:
+                products = await self.fetch_search_suggest_json(query)
+            except Exception as e:
+                print(f"[Rebag] Search suggest failed for query '{query}': {e}")
+                continue
+
+            for product in products:
+                handle = product.get("handle")
+                if not handle or handle in discovered_handles:
+                    continue
+
+                discovered_handles.add(handle)
+                try:
+                    hydrated = await self.fetch_product_json(handle)
+                    if not hydrated:
+                        continue
+                    found, is_new = await self._process_product(hydrated)
+                    if not found:
+                        continue
+                    total_found += 1
+                    if is_new:
+                        total_new += 1
+                    else:
+                        total_updated += 1
+                except Exception as e:
+                    print(f"[Rebag] Error processing search-suggest handle {handle}: {e}")
+                    continue
+
+        return total_found, total_new, total_updated
+
     async def scrape(self) -> int:
         self.begin_scrape_run()
         total_found, total_new, total_updated, discovered_handles, bulk_complete = await self._run_bulk_collection()
@@ -504,6 +600,10 @@ class RebagScraper(BaseScraper):
         total_found += priority_found
         total_new += priority_new
         total_updated += priority_updated
+        suggest_found, suggest_new, suggest_updated = await self._run_search_suggest_backfill(discovered_handles)
+        total_found += suggest_found
+        total_new += suggest_new
+        total_updated += suggest_updated
         supplemental_found, supplemental_new, supplemental_updated, supplemental_failed = await self._run_supplemental_collections(
             discovered_handles
         )
