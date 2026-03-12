@@ -33,6 +33,8 @@ class RebagScraper(BaseScraper):
     SITEMAP_RECENT_PRODUCT_LIMIT = 150
     SITEMAP_HISTORICAL_PRODUCT_LIMIT = 150
     SITEMAP_PRIORITY_PRODUCT_LIMIT = 120
+    SITEMAP_PRIORITY_SITEMAP_LIMIT = 20
+    SITEMAP_PRIORITY_PER_SITEMAP_LIMIT = 8
     PRIORITY_BRAND_KEYWORDS = [
         "chanel",
         "hermes",
@@ -180,6 +182,27 @@ class RebagScraper(BaseScraper):
         lowered = (handle or "").lower()
         return any(keyword in lowered for keyword in self.PRIORITY_BRAND_KEYWORDS)
 
+    def _select_priority_sitemaps(self, sitemap_urls: list[str]) -> list[str]:
+        limit = min(self.SITEMAP_PRIORITY_SITEMAP_LIMIT, len(sitemap_urls))
+        if limit <= 0:
+            return []
+
+        selected: list[str] = []
+        left = 0
+        right = len(sitemap_urls) - 1
+        take_from_right = True
+
+        while left <= right and len(selected) < limit:
+            if take_from_right:
+                selected.append(sitemap_urls[right])
+                right -= 1
+            else:
+                selected.append(sitemap_urls[left])
+                left += 1
+            take_from_right = not take_from_right
+
+        return selected
+
     async def _hydrate_sitemap_handles(
         self,
         sitemap_urls: list[str],
@@ -187,6 +210,7 @@ class RebagScraper(BaseScraper):
         limit: int,
         *,
         priority_only: bool = False,
+        per_sitemap_limit: int | None = None,
     ) -> tuple[int, int, int]:
         total_found = 0
         total_new = 0
@@ -199,9 +223,12 @@ class RebagScraper(BaseScraper):
                 continue
 
             handles = self._extract_product_handles_from_sitemap(sitemap_text)
+            hydrated_this_sitemap = 0
             for handle in reversed(handles):
                 if hydrated >= limit:
                     return total_found, total_new, total_updated
+                if per_sitemap_limit is not None and hydrated_this_sitemap >= per_sitemap_limit:
+                    break
                 if not handle or handle in discovered_handles:
                     continue
                 if priority_only and not self._is_priority_handle(handle):
@@ -209,6 +236,7 @@ class RebagScraper(BaseScraper):
 
                 discovered_handles.add(handle)
                 hydrated += 1
+                hydrated_this_sitemap += 1
                 try:
                     product = await self.fetch_product_json(handle)
                     if not product:
@@ -387,8 +415,20 @@ class RebagScraper(BaseScraper):
         if not sitemap_urls:
             return 0, 0, 0, True
 
+        priority_sitemaps = self._select_priority_sitemaps(sitemap_urls)
         recent_sitemaps = list(reversed(sitemap_urls[-self.SITEMAP_RECENT_COUNT:]))
         historical_sitemaps = list(reversed(self._select_historical_sitemaps(sitemap_urls)))
+
+        priority_found, priority_new, priority_updated = await self._hydrate_sitemap_handles(
+            priority_sitemaps,
+            discovered_handles,
+            self.SITEMAP_PRIORITY_PRODUCT_LIMIT,
+            priority_only=True,
+            per_sitemap_limit=self.SITEMAP_PRIORITY_PER_SITEMAP_LIMIT,
+        )
+        total_found += priority_found
+        total_new += priority_new
+        total_updated += priority_updated
 
         recent_found, recent_new, recent_updated = await self._hydrate_sitemap_handles(
             recent_sitemaps,
@@ -398,16 +438,6 @@ class RebagScraper(BaseScraper):
         total_found += recent_found
         total_new += recent_new
         total_updated += recent_updated
-
-        priority_found, priority_new, priority_updated = await self._hydrate_sitemap_handles(
-            historical_sitemaps,
-            discovered_handles,
-            self.SITEMAP_PRIORITY_PRODUCT_LIMIT,
-            priority_only=True,
-        )
-        total_found += priority_found
-        total_new += priority_new
-        total_updated += priority_updated
 
         historical_found, historical_new, historical_updated = await self._hydrate_sitemap_handles(
             historical_sitemaps,

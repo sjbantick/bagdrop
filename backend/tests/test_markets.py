@@ -343,6 +343,23 @@ def test_rebag_select_historical_sitemaps_spreads_across_older_ranges():
     assert len(selected) == 4
 
 
+def test_rebag_select_priority_sitemaps_interleaves_new_and_old():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SITEMAP_PRIORITY_SITEMAP_LIMIT = 5
+    urls = [f"https://shop.rebag.com/sitemap_products_{i}.xml" for i in range(1, 8)]
+
+    selected = scraper._select_priority_sitemaps(urls)
+
+    assert selected == [
+        "https://shop.rebag.com/sitemap_products_7.xml",
+        "https://shop.rebag.com/sitemap_products_1.xml",
+        "https://shop.rebag.com/sitemap_products_6.xml",
+        "https://shop.rebag.com/sitemap_products_2.xml",
+        "https://shop.rebag.com/sitemap_products_5.xml",
+    ]
+
+
 @pytest.mark.anyio
 async def test_rebag_priority_historical_pass_prefers_brand_handles():
     session = make_session()
