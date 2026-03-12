@@ -32,6 +32,7 @@ from digest import parse_digest_recipients, render_intelligence_digest, send_int
 from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # noqa: E402
 from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
+from scrapers.rebag import RebagScraper  # noqa: E402
 from scrapers.yoogi import YoogiScraper  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
 from scheduler import deactivate_stale_listings  # noqa: E402
@@ -197,6 +198,35 @@ def test_yoogi_extract_listing_prefers_usd_and_msrp():
     assert extracted["original_price"] == 10800
     assert extracted["condition"] == "excellent"
     assert extracted["url"] == "https://www.yoogiscloset.com/456-sample-bag.html"
+
+
+def test_rebag_extract_listing_uses_pdp_json_shape():
+    session = make_session()
+    scraper = RebagScraper(session)
+    product = {
+        "id": 8426678485169,
+        "title": "Classic Double Flap Bag Quilted Lambskin Medium",
+        "handle": "handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601",
+        "body_html": (
+            "<p><b>Estimated Retail Price:</b> $10,800<br>"
+            "<b>Condition:</b> Good.</p>"
+        ),
+        "vendor": "Chanel",
+        "tags": ["handbag", "all-bags", "item-type-handbag", "exterior-color-black", "good"],
+        "variants": [{"price": "5505.00", "title": "Good | Item # 3521601 / Black"}],
+        "images": [{"src": "https://cdn.example.com/rebag.jpg"}],
+    }
+
+    extracted = scraper._extract_listing(product)
+
+    assert extracted is not None
+    assert extracted["platform_id"] == "8426678485169"
+    assert extracted["brand"] == "Chanel"
+    assert extracted["current_price"] == 5505.0
+    assert extracted["original_price"] == 10800.0
+    assert extracted["condition"] == "good"
+    assert extracted["color"] == "Black"
+    assert extracted["url"].endswith("handbags-chanel-classic-double-flap-bag-quilted-lambskin-medium3521601")
 
 
 def test_compute_bag_index_rows_normalizes_negative_zero_delta():

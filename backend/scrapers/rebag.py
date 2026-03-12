@@ -14,6 +14,20 @@ class RebagScraper(BaseScraper):
     platform = Platform.REBAG
     base_url = "https://shop.rebag.com"
     supports_full_inventory_tombstone = True
+    BULK_COLLECTION = "all"
+    SUPPLEMENTAL_COLLECTIONS = [
+        "all-bags",
+        "new-arrivals",
+        "chanel",
+        "hermes",
+        "louis-vuitton",
+        "shoulder-bags",
+        "cross-body-bags",
+        "clutches",
+        "unique-chanel-bags",
+    ]
+    BULK_MAX_PAGES = 60
+    SUPPLEMENTAL_MAX_PAGES = 8
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -81,95 +95,159 @@ class RebagScraper(BaseScraper):
         except json.JSONDecodeError:
             return None
 
-    async def scrape(self) -> int:
+    async def fetch_collection_page(self, collection: str, page: int) -> list[dict]:
+        url = f"{self.base_url}/collections/{collection}/products.json?limit=250&page={page}"
+        data = await self.fetch_json(url)
+        return data.get("products", []) if data else []
+
+    async def fetch_product_json(self, handle: str) -> Optional[dict]:
+        data = await self.fetch_json(f"{self.base_url}/products/{handle}.json")
+        if not data:
+            return None
+        return data.get("product")
+
+    def _is_bag_product(self, tags: list[str], title: str) -> bool:
+        has_bag_tag = any(t in tags for t in ["handbag", "all-bags", "item-type-handbag"])
+        lowered = title.lower()
+        return has_bag_tag or "bag" in lowered or "clutch" in lowered
+
+    def _extract_listing(self, product: dict) -> Optional[dict]:
+        tags = product.get("tags", [])
+        title = product.get("title", "")
+        if not self._is_bag_product(tags, title):
+            return None
+
+        variant = product.get("variants", [{}])[0] if product.get("variants") else {}
+        price_str = variant.get("price", "0") or "0"
+        current_price = float(price_str)
+
+        if current_price <= 0:
+            return None
+
+        body_html = product.get("body_html", "")
+        original_price = self._parse_retail_price(body_html)
+        if not original_price or original_price <= current_price:
+            return None
+
+        vendor = product.get("vendor", "Unknown")
+        handle = product.get("handle", "")
+        variant_title = variant.get("title", "")
+
+        images = product.get("images", [])
+        photo_url = images[0]["src"] if images else None
+
+        brand, model = self._extract_brand_model(title, vendor)
+        condition = self._parse_condition(tags, variant_title)
+        color = self._parse_color(tags)
+        platform_id = str(product.get("id", handle))
+        listing_url = f"{self.base_url}/products/{handle}"
+        description = re.sub(r"<[^>]+>", "", body_html)[:500] if body_html else None
+
+        return {
+            "platform_id": platform_id,
+            "brand": brand,
+            "model": model,
+            "url": listing_url,
+            "current_price": current_price,
+            "original_price": original_price,
+            "condition": condition,
+            "color": color,
+            "photo_url": photo_url,
+            "description": description,
+        }
+
+    def _save_extracted_listing(self, extracted: dict) -> bool:
+        is_new = self.save_listing(**extracted)
+        self.track_seen_listing(extracted["platform_id"])
+        return is_new
+
+    async def _process_product(self, product: dict) -> tuple[bool, bool]:
+        extracted = self._extract_listing(product)
+        if not extracted:
+            return False, False
+        is_new = self._save_extracted_listing(extracted)
+        return True, is_new
+
+    async def _run_bulk_collection(self) -> tuple[int, int, int, set[str]]:
+        total_found = 0
         total_new = 0
         total_updated = 0
-        total_found = 0
-        page = 1
-        self.begin_scrape_run()
+        discovered_handles: set[str] = set()
 
-        # Rebag's /collections/all has all inventory; /new-arrivals for fresh stock
-        # We use /all to get widest coverage
-        while True:
-            url = f"{self.base_url}/collections/all/products.json?limit=250&page={page}"
-            data = await self.fetch_json(url)
-
-            if not data or not data.get("products"):
-                break
-
-            products = data["products"]
+        for page in range(1, self.BULK_MAX_PAGES + 1):
+            products = await self.fetch_collection_page(self.BULK_COLLECTION, page)
             if not products:
                 break
 
             for product in products:
+                handle = product.get("handle")
+                if handle:
+                    discovered_handles.add(handle)
                 try:
-                    # Skip non-bag items (jewelry, accessories, etc.)
-                    tags = product.get("tags", [])
-                    product_type = product.get("product_type", "").lower()
-                    title = product.get("title", "")
-
-                    # Only process handbags and wallets
-                    has_bag_tag = any(t in tags for t in ["handbag", "all-bags", "item-type-handbag"])
-                    if not has_bag_tag and "bag" not in title.lower() and "clutch" not in title.lower():
+                    found, is_new = await self._process_product(product)
+                    if not found:
                         continue
-
-                    variant = product.get("variants", [{}])[0] if product.get("variants") else {}
-                    price_str = variant.get("price", "0") or "0"
-                    current_price = float(price_str)
-
-                    if current_price <= 0:
-                        continue
-
-                    # Get original/retail price from body_html
-                    body_html = product.get("body_html", "")
-                    original_price = self._parse_retail_price(body_html)
-
-                    if not original_price or original_price <= current_price:
-                        continue  # No discount to track
-
-                    vendor = product.get("vendor", "Unknown")
-                    handle = product.get("handle", "")
-                    variant_title = variant.get("title", "")
-
-                    images = product.get("images", [])
-                    photo_url = images[0]["src"] if images else None
-
-                    brand, model = self._extract_brand_model(title, vendor)
-                    condition = self._parse_condition(tags, variant_title)
-                    color = self._parse_color(tags)
-                    platform_id = str(product.get("id", handle))
-                    listing_url = f"{self.base_url}/products/{handle}"
-
-                    # Clean description
-                    description = re.sub(r"<[^>]+>", "", body_html)[:500] if body_html else None
-
                     total_found += 1
-                    is_new = self.save_listing(
-                        platform_id=platform_id,
-                        brand=brand,
-                        model=model,
-                        url=listing_url,
-                        current_price=current_price,
-                        original_price=original_price,
-                        condition=condition,
-                        color=color,
-                        photo_url=photo_url,
-                        description=description,
-                    )
-                    self.track_seen_listing(platform_id)
                     if is_new:
                         total_new += 1
                     else:
                         total_updated += 1
-
                 except Exception as e:
-                    print(f"[Rebag] Error processing product: {e}")
+                    print(f"[Rebag] Error processing bulk product: {e}")
                     continue
 
             if len(products) < 250:
                 break
 
-            page += 1
+        return total_found, total_new, total_updated, discovered_handles
+
+    async def _run_supplemental_collections(self, discovered_handles: set[str]) -> tuple[int, int, int]:
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+
+        for collection in self.SUPPLEMENTAL_COLLECTIONS:
+            for page in range(1, self.SUPPLEMENTAL_MAX_PAGES + 1):
+                products = await self.fetch_collection_page(collection, page)
+                if not products:
+                    break
+
+                for product in products:
+                    handle = product.get("handle")
+                    if not handle or handle in discovered_handles:
+                        continue
+
+                    discovered_handles.add(handle)
+                    try:
+                        hydrated = await self.fetch_product_json(handle)
+                        if not hydrated:
+                            continue
+                        found, is_new = await self._process_product(hydrated)
+                        if not found:
+                            continue
+                        total_found += 1
+                        if is_new:
+                            total_new += 1
+                        else:
+                            total_updated += 1
+                    except Exception as e:
+                        print(f"[Rebag] Error processing supplemental handle {handle}: {e}")
+                        continue
+
+                if len(products) < 250:
+                    break
+
+        return total_found, total_new, total_updated
+
+    async def scrape(self) -> int:
+        self.begin_scrape_run()
+        total_found, total_new, total_updated, discovered_handles = await self._run_bulk_collection()
+        supplemental_found, supplemental_new, supplemental_updated = await self._run_supplemental_collections(
+            discovered_handles
+        )
+        total_found += supplemental_found
+        total_new += supplemental_new
+        total_updated += supplemental_updated
 
         deactivated = self.deactivate_missing_listings()
 
