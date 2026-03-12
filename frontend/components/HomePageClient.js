@@ -9,6 +9,7 @@ import FeaturedMarkets from '@/components/FeaturedMarkets'
 import ArbitrageRadar from '@/components/ArbitrageRadar'
 import BagIndexBoard from '@/components/BagIndexBoard'
 import NewDropsRadar from '@/components/NewDropsRadar'
+import HomeWatchSignup from '@/components/HomeWatchSignup'
 import { getApiUrl } from '@/lib/api'
 
 export default function HomePageClient({
@@ -165,6 +166,7 @@ export default function HomePageClient({
           </div>
         </section>
 
+        <HomeWatchSignup markets={featuredMarkets} />
         <FeaturedMarkets markets={featuredMarkets} />
         <ArbitrageRadar opportunities={arbitrageOpportunities} />
         <BagIndexBoard snapshots={bagIndex} />
