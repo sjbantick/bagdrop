@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+function normalizeBaseUrl(value, fallback) {
+  return (value || fallback).trim().replace(/\/+$/, '')
+}
+
+const API_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_URL, 'http://localhost:8000')
 
 export function getApiUrl(path) {
   return `${API_URL}${path}`
@@ -26,4 +30,4 @@ export function buildOutboundUrl(listingId, surface, context = '') {
   return getApiUrl(`/api/listings/${listingId}/outbound?${params.toString()}`)
 }
 
-export { API_URL }
+export { API_URL, normalizeBaseUrl }

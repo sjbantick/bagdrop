@@ -1,5 +1,6 @@
-export const SITE_URL =
-  (process.env.NEXT_PUBLIC_SITE_URL || 'https://bagdrop.xyz').replace(/\/+$/, '')
+import { normalizeBaseUrl } from '@/lib/api'
+
+export const SITE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL, 'https://thebagdrop.xyz')
 
 export function absoluteUrl(path = '/') {
   if (!path) {
