@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     scraper_timeout: int = 30
     scraper_retry_count: int = 3
     scraper_rate_limit_delay: float = 1.0  # seconds between requests
+    browser_scraping_enabled: bool = True
+    browser_scraper_timeout_ms: int = 45000
 
     # Scheduler
     scheduler_enabled: bool = True

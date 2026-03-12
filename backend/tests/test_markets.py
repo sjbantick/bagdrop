@@ -34,8 +34,10 @@ from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # 
 from models import Base, BagIndexSnapshot, Listing, ListingReport, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
 from scrapers.cosette import CosetteScraper  # noqa: E402
+from scrapers.realreal import RealRealScraper  # noqa: E402
 from scrapers.rebag import RebagScraper  # noqa: E402
 from scrapers.thepurseaffair import ThePurseAffairScraper  # noqa: E402
+from scrapers.vestiaire import VestiaireScraper  # noqa: E402
 from scrapers.yoogi import YoogiScraper  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
 from scheduler import deactivate_stale_listings  # noqa: E402
@@ -310,6 +312,88 @@ def test_the_purse_affair_extracts_available_discounted_bag():
     assert scraper._parse_model_from_title(product["title"], product["vendor"]) == "Gabrielle Large Black"
     assert scraper._parse_condition(body_text) == "excellent"
     assert scraper._parse_color(product["tags"], body_text) == "Black"
+
+
+@pytest.mark.anyio
+async def test_realreal_scrape_page_uses_browser_fallback():
+    session = make_session()
+    scraper = RealRealScraper(session)
+    next_data_html = """
+    <html><body>
+    <script id="__NEXT_DATA__" type="application/json">
+    {"props":{"pageProps":{"products":[{"id":"rr-1","price":"1200","originalPrice":"2400","brand":"Chanel","title":"Classic Flap","slug":"classic-flap"}]}}}
+    </script>
+    </body></html>
+    """
+
+    async def fake_fetch(url):
+        return None
+
+    async def fake_browser(url):
+        return next_data_html
+
+    scraper.fetch = fake_fetch
+    scraper.fetch_with_browser = fake_browser
+
+    products = await scraper._scrape_page("https://example.com")
+
+    assert len(products) == 1
+    assert products[0]["id"] == "rr-1"
+
+
+def test_vestiaire_extracts_discounted_item_from_live_shape():
+    session = make_session()
+    scraper = VestiaireScraper(session)
+    product = {
+        "id": 64687388,
+        "brand": {"id": 2, "name": "Gucci"},
+        "name": "D-Ring cloth tote",
+        "model": {"id": 6558, "name": "D-Ring"},
+        "colors": {"all": [{"id": 2, "name": "Beige"}]},
+        "pictures": ["/produit/64687388-1_4.jpg"],
+        "price": {"cents": 18400, "currency": "AUD"},
+        "discount": {
+            "originalPrice": {"cents": 21300, "currency": "AUD"},
+            "percent": 14,
+        },
+        "link": "/women-bags/handbags/gucci/beige-cloth-d-ring-gucci-handbag-64687388.shtml",
+        "sold": False,
+        "stock": False,
+    }
+
+    extracted = scraper._extract_listing(product)
+
+    assert extracted is not None
+    assert extracted["platform_id"] == "64687388"
+    assert extracted["brand"] == "Gucci"
+    assert extracted["current_price"] == 184.0
+    assert extracted["original_price"] == 213.0
+    assert extracted["color"] == "Beige"
+    assert extracted["photo_url"].endswith("/produit/64687388-1_4.jpg")
+
+
+@pytest.mark.anyio
+async def test_vestiaire_uses_browser_fallback_when_api_blocked():
+    session = make_session()
+    scraper = VestiaireScraper(session)
+    async def fake_scrape_page_with_browser(page_num):
+        assert page_num == 1
+        return [
+            {
+                "id": "vc-1",
+                "price": {"cents": 100000, "currency": "AUD"},
+                "discount": {"originalPrice": {"cents": 200000, "currency": "AUD"}},
+                "brand": {"name": "Chanel"},
+                "name": "Classic Flap",
+                "link": "/women-bags/handbags/chanel/classic-flap-vc-1.shtml",
+            }
+        ]
+
+    scraper._scrape_page_with_browser = fake_scrape_page_with_browser
+
+    result = await scraper.scrape()
+
+    assert result == 1
 
 
 @pytest.mark.anyio

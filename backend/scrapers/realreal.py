@@ -169,10 +169,18 @@ class RealRealScraper(BaseScraper):
     async def _scrape_page(self, url: str) -> List[dict]:
         """Scrape a single search results page"""
         html = await self.fetch(url)
-        if not html:
+        if html:
+            next_data = self._extract_next_data(html)
+            if next_data:
+                products = self._parse_products_from_next_data(next_data)
+                if products:
+                    return products
+
+        browser_html = await self.fetch_with_browser(url)
+        if not browser_html:
             return []
 
-        next_data = self._extract_next_data(html)
+        next_data = self._extract_next_data(browser_html)
         if not next_data:
             return []
 

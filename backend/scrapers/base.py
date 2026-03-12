@@ -62,6 +62,64 @@ class BaseScraper(ABC):
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
         return None
 
+    async def fetch_with_browser(
+        self,
+        url: str,
+        *,
+        wait_until: str = "domcontentloaded",
+        wait_for_timeout_ms: int = 3000,
+    ) -> Optional[str]:
+        """Fetch a URL with Playwright for anti-bot or JS-heavy pages."""
+        if not settings.browser_scraping_enabled:
+            return None
+
+        try:
+            from playwright.async_api import async_playwright
+        except Exception as e:
+            print(f"Playwright unavailable for browser fetch {url}: {e}")
+            return None
+
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                    ],
+                )
+                context = await browser.new_context(
+                    user_agent=self.get_headers()["User-Agent"],
+                    locale="en-US",
+                    viewport={"width": 1440, "height": 1800},
+                )
+                page = await context.new_page()
+
+                # Save bandwidth and reduce obvious automation noise.
+                async def route_handler(route):
+                    request = route.request
+                    if request.resource_type in {"image", "media", "font"}:
+                        await route.abort()
+                    else:
+                        await route.continue_()
+
+                await page.route("**/*", route_handler)
+                await page.goto(
+                    url,
+                    wait_until=wait_until,
+                    timeout=settings.browser_scraper_timeout_ms,
+                )
+                if wait_for_timeout_ms > 0:
+                    await page.wait_for_timeout(wait_for_timeout_ms)
+                content = await page.content()
+                await context.close()
+                await browser.close()
+                return content
+        except Exception as e:
+            print(f"Browser fetch failed for {url}: {e}")
+            return None
+
     @abstractmethod
     async def scrape(self) -> int:
         """Scrape listings from this platform. Return count of new/updated listings"""

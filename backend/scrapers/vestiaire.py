@@ -1,4 +1,5 @@
 """Vestiaire Collective scraper — uses their catalog API"""
+import asyncio
 import json
 import re
 from typing import Optional, List
@@ -8,8 +9,11 @@ from scrapers.base import BaseScraper
 
 class VestiaireScraper(BaseScraper):
     platform = Platform.VESTIAIRE
-    base_url = "https://www.vestiairecollective.com"
+    base_url = "https://us.vestiairecollective.com"
     api_base = "https://www.vestiairecollective.com"
+    image_base = "https://images.vestiairecollective.com"
+    browser_search_base = "https://us.vestiairecollective.com/women-bags/handbags/?page={page}"
+    browser_api_url = "https://search.vestiairecollective.com/v1/product/search"
 
     # Vestiaire women's bags search with price drop sort
     CATALOG_PATHS = [
@@ -91,6 +95,10 @@ class VestiaireScraper(BaseScraper):
             # Price — Vestiaire uses various formats
             price_obj = product.get("price") or product.get("priceInfo") or {}
             original_obj = product.get("originalPrice") or product.get("retailPrice") or {}
+            if not original_obj:
+                discount = product.get("discount") or {}
+                if isinstance(discount, dict):
+                    original_obj = discount.get("originalPrice") or {}
 
             if isinstance(price_obj, (int, float)):
                 current_price = float(price_obj)
@@ -128,6 +136,8 @@ class VestiaireScraper(BaseScraper):
                 or product.get("shortName")
                 or ""
             )
+            if isinstance(model, dict):
+                model = model.get("name") or model.get("label") or ""
 
             # Condition
             condition_raw = (
@@ -147,16 +157,38 @@ class VestiaireScraper(BaseScraper):
                 listing_url = f"{self.base_url}{slug}" if slug.startswith("/") else f"{self.base_url}/{slug}"
 
             # Photo
-            image = product.get("image") or product.get("photo") or product.get("thumbnail") or {}
+            image = product.get("image") or product.get("photo") or product.get("thumbnail")
             if isinstance(image, str):
                 photo_url = image
             elif isinstance(image, dict):
                 photo_url = image.get("url") or image.get("src") or image.get("medium")
             else:
-                photo_url = None
+                pictures = product.get("pictures") or []
+                if pictures:
+                    first_picture = pictures[0]
+                    if isinstance(first_picture, str):
+                        photo_url = (
+                            f"{self.image_base}{first_picture}"
+                            if first_picture.startswith("/")
+                            else first_picture
+                        )
+                    else:
+                        photo_url = None
+                else:
+                    photo_url = None
 
             size = product.get("size") or product.get("bagSize")
+            if isinstance(size, dict):
+                size = size.get("name") or size.get("label")
+
             color = product.get("color") or product.get("colorName")
+            if not color:
+                colors = product.get("colors") or {}
+                if isinstance(colors, dict):
+                    all_colors = colors.get("all") or []
+                    if all_colors:
+                        first_color = all_colors[0]
+                        color = first_color.get("name") if isinstance(first_color, dict) else first_color
 
             return {
                 "platform_id": str(product_id),
@@ -174,45 +206,71 @@ class VestiaireScraper(BaseScraper):
             print(f"[Vestiaire] Error extracting product: {e}")
             return None
 
+    async def _scrape_page_with_browser(self, page_num: int) -> List[dict]:
+        try:
+            from playwright.async_api import async_playwright
+        except Exception as e:
+            print(f"[Vestiaire] Playwright unavailable: {e}")
+            return []
+
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                    ],
+                )
+                context = await browser.new_context(
+                    user_agent=self.get_headers()["User-Agent"],
+                    locale="en-US",
+                    viewport={"width": 1440, "height": 1800},
+                )
+                page = await context.new_page()
+
+                result_future = asyncio.get_running_loop().create_future()
+
+                async def handle_response(response):
+                    if not response.url.startswith(self.browser_api_url) or result_future.done():
+                        return
+                    try:
+                        data = await response.json()
+                        result_future.set_result(data.get("items", []))
+                    except Exception as exc:
+                        result_future.set_exception(exc)
+
+                page.on("response", handle_response)
+                await page.goto(
+                    self.browser_search_base.format(page=page_num),
+                    wait_until="networkidle",
+                    timeout=max(self.http_client.timeout.connect * 1000, 30000),
+                )
+                products = await asyncio.wait_for(
+                    result_future,
+                    timeout=max(self.http_client.timeout.connect, 30),
+                )
+                await context.close()
+                await browser.close()
+                return products
+        except Exception as e:
+            print(f"[Vestiaire] Browser scrape failed on page {page_num}: {e}")
+            return []
+
     async def scrape(self) -> int:
         total_new = 0
         total_updated = 0
         total_found = 0
-        max_pages = 15
+        max_pages = 10
         pages_with_products = 0
 
         for page in range(1, max_pages + 1):
-            # Try API endpoint first
-            api_url = self.api_base + self.CATALOG_PATHS[0].format(page=page)
-            text = await self.fetch(api_url)
-
-            products = []
-
-            if text:
-                try:
-                    data = json.loads(text)
-                    # Try to extract products from JSON response
-                    if isinstance(data, list):
-                        products = data
-                    elif isinstance(data, dict):
-                        for key in ["products", "items", "results", "data", "catalogue"]:
-                            if key in data and isinstance(data[key], list):
-                                products = data[key]
-                                break
-                        if not products and "items" in data:
-                            products = data.get("items", [])
-                except json.JSONDecodeError:
-                    # Fallback: parse HTML __NEXT_DATA__
-                    page_url = self.base_url + self.CATALOG_PATHS[1].format(page=page)
-                    html = await self.fetch(page_url)
-                    if html:
-                        page_data = self._extract_next_data(html)
-                        if page_data:
-                            products = self._parse_products_from_page_data(page_data)
+            products = await self._scrape_page_with_browser(page)
 
             if not products:
                 if page == 1:
-                    self.fail_scrape(error="[Vestiaire] No products found on page 1 — API may have changed")
+                    self.fail_scrape(error="[Vestiaire] No products found on page 1 — browser-backed search is blocked")
                 break
 
             pages_with_products += 1
