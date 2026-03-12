@@ -5,6 +5,7 @@ Condition and color are encoded in product tags.
 """
 import json
 import re
+import asyncio
 from typing import Optional, Tuple
 from config import settings
 from models import Platform
@@ -38,6 +39,8 @@ class RebagScraper(BaseScraper):
     SITEMAP_PRIORITY_PER_SITEMAP_LIMIT = 8
     SEARCH_SUGGEST_LIMIT = 10
     SEARCH_SUGGEST_QUERY_LIMIT = 18
+    PRIORITY_PDP_RETRY_ATTEMPTS = 3
+    PRIORITY_PDP_RETRY_DELAY_SECONDS = 2.5
     PRIORITY_BRAND_KEYWORDS = [
         "chanel",
         "hermes",
@@ -165,6 +168,15 @@ class RebagScraper(BaseScraper):
         if not data:
             return None
         return data.get("product")
+
+    async def fetch_priority_product_json(self, handle: str) -> Optional[dict]:
+        for attempt in range(self.PRIORITY_PDP_RETRY_ATTEMPTS):
+            product = await self.fetch_product_json(handle)
+            if product:
+                return product
+            if attempt < self.PRIORITY_PDP_RETRY_ATTEMPTS - 1:
+                await asyncio.sleep(self.PRIORITY_PDP_RETRY_DELAY_SECONDS * (attempt + 1))
+        return None
 
     async def fetch_text(self, url: str) -> Optional[str]:
         return await self.fetch(url)
@@ -540,7 +552,7 @@ class RebagScraper(BaseScraper):
                 continue
             discovered_handles.add(handle)
             try:
-                product = await self.fetch_product_json(handle)
+                product = await self.fetch_priority_product_json(handle)
                 if not product:
                     continue
                 found, is_new = await self._process_product(product)
@@ -576,7 +588,7 @@ class RebagScraper(BaseScraper):
 
                 discovered_handles.add(handle)
                 try:
-                    hydrated = await self.fetch_product_json(handle)
+                    hydrated = await self.fetch_priority_product_json(handle)
                     if not hydrated:
                         continue
                     found, is_new = await self._process_product(hydrated)
@@ -595,7 +607,11 @@ class RebagScraper(BaseScraper):
 
     async def scrape(self) -> int:
         self.begin_scrape_run()
-        total_found, total_new, total_updated, discovered_handles, bulk_complete = await self._run_bulk_collection()
+        total_found = 0
+        total_new = 0
+        total_updated = 0
+        discovered_handles: set[str] = set()
+
         priority_found, priority_new, priority_updated = await self._run_priority_handle_backfill(discovered_handles)
         total_found += priority_found
         total_new += priority_new
@@ -604,6 +620,11 @@ class RebagScraper(BaseScraper):
         total_found += suggest_found
         total_new += suggest_new
         total_updated += suggest_updated
+        bulk_found, bulk_new, bulk_updated, bulk_discovered_handles, bulk_complete = await self._run_bulk_collection()
+        discovered_handles.update(bulk_discovered_handles)
+        total_found += bulk_found
+        total_new += bulk_new
+        total_updated += bulk_updated
         supplemental_found, supplemental_new, supplemental_updated, supplemental_failed = await self._run_supplemental_collections(
             discovered_handles
         )

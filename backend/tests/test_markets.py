@@ -350,7 +350,7 @@ async def test_rebag_priority_handle_backfill_hydrates_seeded_handle():
             "images": [{"src": "https://cdn.example.com/rebag-priority.jpg"}],
         }
 
-    scraper.fetch_product_json = fake_fetch_product_json
+    scraper.fetch_priority_product_json = fake_fetch_product_json
 
     found, new, updated = await scraper._run_priority_handle_backfill(discovered_handles)
 
@@ -380,7 +380,7 @@ async def test_rebag_priority_handle_backfill_hydrates_even_if_handle_already_di
             "images": [{"src": "https://cdn.example.com/rebag-priority-duplicate.jpg"}],
         }
 
-    scraper.fetch_product_json = fake_fetch_product_json
+    scraper.fetch_priority_product_json = fake_fetch_product_json
 
     found, new, updated = await scraper._run_priority_handle_backfill(discovered_handles)
 
@@ -418,7 +418,7 @@ async def test_rebag_search_suggest_backfill_hydrates_priority_queries():
         }
 
     scraper.fetch_search_suggest_json = fake_fetch_search_suggest_json
-    scraper.fetch_product_json = fake_fetch_product_json
+    scraper.fetch_priority_product_json = fake_fetch_product_json
 
     found, new, updated = await scraper._run_search_suggest_backfill(discovered_handles)
 
@@ -703,6 +703,7 @@ async def test_rebag_scrape_fails_loudly_on_zero_result_run():
     session = make_session()
     scraper = RebagScraper(session)
     scraper.SEEDED_PRIORITY_HANDLES = []
+    scraper.SEEDED_PRIORITY_QUERIES = []
 
     async def fake_bulk():
         return 0, 0, 0, set(), False
@@ -728,6 +729,7 @@ async def test_rebag_scrape_skips_tombstone_on_partial_run():
     session = make_session()
     scraper = RebagScraper(session)
     scraper.SEEDED_PRIORITY_HANDLES = []
+    scraper.SEEDED_PRIORITY_QUERIES = []
     deactivated = {"count": 0}
 
     async def fake_bulk():
@@ -754,6 +756,51 @@ async def test_rebag_scrape_skips_tombstone_on_partial_run():
 
     assert result == 5
     assert deactivated["count"] == 0
+
+
+@pytest.mark.anyio
+async def test_rebag_scrape_runs_priority_lanes_before_bulk():
+    session = make_session()
+    scraper = RebagScraper(session)
+    scraper.SEEDED_PRIORITY_HANDLES = []
+    scraper.SEEDED_PRIORITY_QUERIES = []
+    order = []
+
+    async def fake_priority(discovered_handles):
+        order.append("priority")
+        discovered_handles.add("priority-handle")
+        return 1, 1, 0
+
+    async def fake_suggest(discovered_handles):
+        order.append("suggest")
+        assert discovered_handles == {"priority-handle"}
+        discovered_handles.add("suggest-handle")
+        return 1, 1, 0
+
+    async def fake_bulk():
+        order.append("bulk")
+        return 1, 0, 1, {"bulk-handle"}, True
+
+    async def fake_supplemental(discovered_handles):
+        order.append("supplemental")
+        assert discovered_handles == {"priority-handle", "suggest-handle", "bulk-handle"}
+        return 0, 0, 0, False
+
+    async def fake_sitemap(discovered_handles):
+        order.append("sitemap")
+        assert discovered_handles == {"priority-handle", "suggest-handle", "bulk-handle"}
+        return 0, 0, 0, False
+
+    scraper._run_priority_handle_backfill = fake_priority
+    scraper._run_search_suggest_backfill = fake_suggest
+    scraper._run_bulk_collection = fake_bulk
+    scraper._run_supplemental_collections = fake_supplemental
+    scraper._run_sitemap_discovery = fake_sitemap
+
+    result = await scraper.scrape()
+
+    assert result == 3
+    assert order == ["priority", "suggest", "bulk", "supplemental", "sitemap"]
 
 
 def test_compute_bag_index_rows_normalizes_negative_zero_delta():
