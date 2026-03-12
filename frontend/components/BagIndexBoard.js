@@ -9,10 +9,10 @@ export default function BagIndexBoard({ snapshots = [] }) {
     <section className="mb-8">
       <div className="flex items-end justify-between gap-4 mb-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.25em] text-red-500 mb-2">BagIndex</p>
-          <h2 className="text-2xl font-semibold text-white">Brand-level price health</h2>
+          <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">BagIndex</p>
+          <h2 className="text-2xl font-semibold text-stone-900">Brand-level price health</h2>
         </div>
-        <p className="text-sm text-gray-500 max-w-md text-right hidden md:block">
+        <p className="hidden max-w-md text-right text-sm text-stone-500 md:block">
           BagIndex measures the current average resale price of a brand against its observed peak average inside
           BagDrop. Lower numbers mean more price pressure.
         </p>
@@ -37,12 +37,12 @@ export default function BagIndexBoard({ snapshots = [] }) {
           return (
             <div
               key={snapshot.brand}
-              className="rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-950 via-gray-900 to-black p-5"
+              className="rounded-2xl border border-stone-200 bg-[#fffaf2] p-5 shadow-[0_10px_30px_rgba(194,168,140,0.08)]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-400">Brand</p>
-                  <h3 className="mt-1 text-xl font-semibold text-white">{titleCase(snapshot.brand)}</h3>
+                  <p className="text-sm font-medium text-stone-500">Brand</p>
+                  <h3 className="mt-1 text-xl font-semibold text-stone-900">{titleCase(snapshot.brand)}</h3>
                   <p className={`mt-2 text-xs font-mono ${trendTone}`}>
                     {snapshot.delta_pct != null ? `${snapshot.delta_pct > 0 ? '+' : ''}${snapshot.delta_pct}% vs last` : trendLabel}
                   </p>
@@ -55,20 +55,20 @@ export default function BagIndexBoard({ snapshots = [] }) {
 
               <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-gray-500">Current avg</p>
-                  <p className="mt-1 font-semibold text-white">{formatCurrency(snapshot.current_avg_price)}</p>
+                  <p className="text-stone-500">Current avg</p>
+                  <p className="mt-1 font-semibold text-stone-900">{formatCurrency(snapshot.current_avg_price)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Peak avg</p>
-                  <p className="mt-1 font-semibold text-white">{formatCurrency(snapshot.peak_avg_price)}</p>
+                  <p className="text-stone-500">Peak avg</p>
+                  <p className="mt-1 font-semibold text-stone-900">{formatCurrency(snapshot.peak_avg_price)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Active listings</p>
-                  <p className="mt-1 font-semibold text-white">{snapshot.active_listings_count}</p>
+                  <p className="text-stone-500">Active listings</p>
+                  <p className="mt-1 font-semibold text-stone-900">{snapshot.active_listings_count}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Avg drop</p>
-                  <p className="mt-1 font-semibold text-red-300">
+                  <p className="text-stone-500">Avg drop</p>
+                  <p className="mt-1 font-semibold text-pink-600">
                     {snapshot.avg_drop_pct ? `-${formatPercent(snapshot.avg_drop_pct)}` : 'N/A'}
                   </p>
                 </div>
