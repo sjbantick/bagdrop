@@ -2,12 +2,32 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from datetime import datetime
+from datetime import datetime, timedelta
 from alerts import deliver_watch_alerts
 from database import SessionLocal
 from config import settings
 from intelligence import persist_bag_index_snapshots
+from models import Listing
 from scrapers import FashionphileScraper, RealRealScraper, RebagScraper, VestiaireScraper
+
+
+def deactivate_stale_listings(db, *, stale_after_hours: int | None = None) -> int:
+    """Mark stale listings inactive when they have not been re-seen recently."""
+    stale_after_hours = stale_after_hours or settings.public_listing_freshness_hours
+    stale_cutoff = datetime.utcnow() - timedelta(hours=max(stale_after_hours, 1))
+    stale_rows = (
+        db.query(Listing)
+        .filter(Listing.is_active == True, Listing.last_seen < stale_cutoff)
+        .all()
+    )
+
+    for listing in stale_rows:
+        listing.is_active = False
+
+    if stale_rows:
+        db.commit()
+
+    return len(stale_rows)
 
 
 async def run_all_scrapers():
@@ -34,6 +54,12 @@ async def run_all_scrapers():
             print(f"[Scheduler] Scraper {scraper.__class__.__name__} failed: {e}")
         finally:
             await scraper.close()
+
+    try:
+        deactivated = deactivate_stale_listings(db)
+        print(f"[Scheduler] Deactivated {deactivated} stale listings")
+    except Exception as e:
+        print(f"[Scheduler] Stale listing cleanup failed: {e}")
 
     try:
         rows = persist_bag_index_snapshots(db)

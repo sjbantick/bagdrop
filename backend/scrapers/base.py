@@ -23,10 +23,13 @@ class BaseScraper(ABC):
 
     platform: Platform
     base_url: str
+    supports_full_inventory_tombstone: bool = False
 
     def __init__(self, db: Session):
         self.db = db
         self.http_client = httpx.AsyncClient(timeout=settings.scraper_timeout)
+        self.scrape_started_at: Optional[datetime] = None
+        self.seen_listing_ids: set[str] = set()
 
     async def close(self):
         """Close HTTP client"""
@@ -84,6 +87,47 @@ class BaseScraper(ABC):
         """Normalize model name"""
         return model.strip().lower()
 
+    def build_listing_id(self, platform_id: str) -> str:
+        return f"{self.platform.value}_{platform_id}"
+
+    def begin_scrape_run(self):
+        self.scrape_started_at = datetime.utcnow()
+        self.seen_listing_ids = set()
+
+    def track_seen_listing(self, platform_id: str):
+        self.seen_listing_ids.add(self.build_listing_id(str(platform_id)))
+
+    def deactivate_missing_listings(self) -> int:
+        """Mark listings inactive if they were not seen during a full successful inventory scrape."""
+        if not self.supports_full_inventory_tombstone or not self.scrape_started_at:
+            return 0
+
+        stale_rows = (
+            self.db.query(Listing)
+            .filter(
+                Listing.platform == self.platform.value,
+                Listing.is_active == True,
+                Listing.last_seen < self.scrape_started_at,
+            )
+            .all()
+        )
+
+        deactivated = 0
+        for listing in stale_rows:
+            if listing.id in self.seen_listing_ids:
+                continue
+            listing.is_active = False
+            deactivated += 1
+
+        if deactivated:
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+
+        return deactivated
+
     def save_listing(
         self,
         platform_id: str,
@@ -100,7 +144,7 @@ class BaseScraper(ABC):
         photo_url: Optional[str] = None,
     ) -> bool:
         """Save or update a listing. Return True if new."""
-        listing_id = f"{self.platform.value}_{platform_id}"
+        listing_id = self.build_listing_id(platform_id)
 
         # Check if exists
         existing = self.db.query(Listing).filter(Listing.id == listing_id).first()

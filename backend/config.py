@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     debug: bool = True
     public_app_url: str = "http://localhost:3000"
     public_api_url: str = "http://localhost:8000"
+    public_listing_freshness_hours: int = 12
     outbound_utm_source: str = "bagdrop"
     realreal_affiliate_query: str = ""
     vestiaire_affiliate_query: str = ""

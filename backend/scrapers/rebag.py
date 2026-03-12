@@ -13,6 +13,7 @@ from scrapers.base import BaseScraper
 class RebagScraper(BaseScraper):
     platform = Platform.REBAG
     base_url = "https://shop.rebag.com"
+    supports_full_inventory_tombstone = True
 
     # Condition map from Rebag tags/variant titles
     CONDITION_MAP = {
@@ -85,6 +86,7 @@ class RebagScraper(BaseScraper):
         total_updated = 0
         total_found = 0
         page = 1
+        self.begin_scrape_run()
 
         # Rebag's /collections/all has all inventory; /new-arrivals for fresh stock
         # We use /all to get widest coverage
@@ -154,6 +156,7 @@ class RebagScraper(BaseScraper):
                         photo_url=photo_url,
                         description=description,
                     )
+                    self.track_seen_listing(platform_id)
                     if is_new:
                         total_new += 1
                     else:
@@ -168,11 +171,16 @@ class RebagScraper(BaseScraper):
 
             page += 1
 
+        deactivated = self.deactivate_missing_listings()
+
         self.log_scrape(
             success=True,
             listings_found=total_found,
             listings_new=total_new,
             listings_updated=total_updated,
         )
-        print(f"[Rebag] Done: {total_found} found, {total_new} new, {total_updated} updated")
+        print(
+            f"[Rebag] Done: {total_found} found, {total_new} new, "
+            f"{total_updated} updated, {deactivated} deactivated"
+        )
         return total_new + total_updated

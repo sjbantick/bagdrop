@@ -9,6 +9,7 @@ from scrapers.base import BaseScraper
 class FashionphileScraper(BaseScraper):
     platform = Platform.FASHIONPHILE
     base_url = "https://fashionphile.com"
+    supports_full_inventory_tombstone = True
 
     CONDITION_MAP = {
         "never worn": "pristine",
@@ -50,6 +51,7 @@ class FashionphileScraper(BaseScraper):
         total_updated = 0
         total_found = 0
         page = 1
+        self.begin_scrape_run()
 
         while True:
             url = f"{self.base_url}/collections/handbags/products.json?limit=250&page={page}"
@@ -104,6 +106,7 @@ class FashionphileScraper(BaseScraper):
                         photo_url=photo_url,
                         description=re.sub(r"<[^>]+>", "", body_html)[:500] if body_html else None,
                     )
+                    self.track_seen_listing(platform_id)
                     if is_new:
                         total_new += 1
                     else:
@@ -118,11 +121,16 @@ class FashionphileScraper(BaseScraper):
 
             page += 1
 
+        deactivated = self.deactivate_missing_listings()
+
         self.log_scrape(
             success=True,
             listings_found=total_found,
             listings_new=total_new,
             listings_updated=total_updated,
         )
-        print(f"[Fashionphile] Done: {total_found} found, {total_new} new, {total_updated} updated")
+        print(
+            f"[Fashionphile] Done: {total_found} found, {total_new} new, "
+            f"{total_updated} updated, {deactivated} deactivated"
+        )
         return total_new + total_updated

@@ -19,6 +19,8 @@ from main import (  # noqa: E402
     _affiliate_query_for_platform,
     _build_outbound_target_url,
     _resolve_market,
+    get_listing,
+    get_listings,
     get_ops_summary,
     subscribe_to_watchlist,
 )
@@ -29,6 +31,7 @@ from intelligence import compute_bag_index_rows, persist_bag_index_snapshots  # 
 from models import Base, BagIndexSnapshot, Listing, WatchAlertDelivery, WatchSubscription  # noqa: E402
 from models import OutboundClick  # noqa: E402
 import scheduler as scheduler_module  # noqa: E402
+from scheduler import deactivate_stale_listings  # noqa: E402
 from utils import market_path, slugify_text  # noqa: E402
 from datetime import datetime, timedelta
 
@@ -164,6 +167,108 @@ def test_compute_bag_index_rows_normalizes_negative_zero_delta():
 
     assert rows[0].delta_pct == 0.0
     assert rows[0].trend == "flat"
+
+
+def test_deactivate_stale_listings_marks_old_inventory_inactive():
+    session = make_session()
+    now = datetime.utcnow()
+    session.add_all([
+        Listing(
+            id="fresh_1",
+            platform="fashionphile",
+            platform_id="fresh_1",
+            url="https://example.com/fresh",
+            brand="Chanel",
+            model="Classic Flap",
+            condition="good",
+            current_price=7000,
+            original_price=9000,
+            drop_amount=2000,
+            drop_pct=22.2,
+            is_active=True,
+            last_seen=now,
+        ),
+        Listing(
+            id="stale_1",
+            platform="fashionphile",
+            platform_id="stale_1",
+            url="https://example.com/stale",
+            brand="Chanel",
+            model="Classic Flap",
+            condition="good",
+            current_price=6800,
+            original_price=9000,
+            drop_amount=2200,
+            drop_pct=24.4,
+            is_active=True,
+            last_seen=now - timedelta(hours=16),
+        ),
+    ])
+    session.commit()
+
+    deactivated = deactivate_stale_listings(session, stale_after_hours=12)
+    fresh = session.query(Listing).filter(Listing.id == "fresh_1").one()
+    stale = session.query(Listing).filter(Listing.id == "stale_1").one()
+
+    assert deactivated == 1
+    assert fresh.is_active is True
+    assert stale.is_active is False
+
+
+@pytest.mark.anyio
+async def test_public_listing_queries_hide_stale_inventory():
+    session = make_session()
+    now = datetime.utcnow()
+    session.add_all([
+        Listing(
+            id="fresh_1",
+            platform="fashionphile",
+            platform_id="fresh_1",
+            url="https://example.com/fresh",
+            brand="Chanel",
+            model="Classic Flap",
+            condition="good",
+            current_price=7000,
+            original_price=9000,
+            drop_amount=2000,
+            drop_pct=22.2,
+            is_active=True,
+            last_seen=now,
+        ),
+        Listing(
+            id="stale_1",
+            platform="fashionphile",
+            platform_id="stale_1",
+            url="https://example.com/stale",
+            brand="Chanel",
+            model="Classic Flap",
+            condition="good",
+            current_price=6800,
+            original_price=9000,
+            drop_amount=2200,
+            drop_pct=24.4,
+            is_active=True,
+            last_seen=now - timedelta(hours=16),
+        ),
+    ])
+    session.commit()
+
+    listings = await get_listings(
+        db=session,
+        brand=None,
+        model=None,
+        platform=None,
+        min_drop_pct=0,
+        max_drop_pct=100,
+        sort_by="drop_pct",
+        limit=50,
+        offset=0,
+    )
+
+    assert [listing.id for listing in listings] == ["fresh_1"]
+    with pytest.raises(HTTPException) as exc:
+        await get_listing("stale_1", db=session)
+    assert exc.value.status_code == 404
 
 
 @pytest.mark.anyio

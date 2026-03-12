@@ -303,10 +303,22 @@ def _round_float(value: Optional[float], digits: int = 1) -> Optional[float]:
     return round(float(value), digits)
 
 
+def _public_listing_cutoff() -> datetime:
+    return datetime.utcnow() - timedelta(hours=max(settings.public_listing_freshness_hours, 1))
+
+
+def _public_listing_condition(*conditions):
+    return and_(
+        Listing.is_active == True,
+        Listing.last_seen >= _public_listing_cutoff(),
+        *conditions,
+    )
+
+
 def _resolve_market(db: Session, brand_slug: str, model_slug: str) -> Optional[tuple[str, str]]:
     combinations = (
         db.query(Listing.brand, Listing.model)
-        .filter(Listing.is_active == True)
+        .filter(_public_listing_condition())
         .distinct()
         .all()
     )
@@ -412,8 +424,7 @@ def _build_market_velocity(db: Session, brand: str, model: str) -> MarketVelocit
     }
 
     base_query = db.query(Listing).filter(
-        and_(
-            Listing.is_active == True,
+        _public_listing_condition(
             Listing.brand == brand,
             Listing.model == model,
         )
@@ -490,6 +501,7 @@ def _build_arbitrage_opportunities(
             func.min(Listing.current_price).label("lowest_price"),
         )
         .filter(Listing.is_active == True)
+        .filter(Listing.last_seen >= _public_listing_cutoff())
         .group_by(Listing.brand, Listing.model)
         .having(func.count(Listing.id) >= min_market_listings)
         .having(func.count(func.distinct(Listing.platform)) >= min_platforms)
@@ -562,6 +574,7 @@ def _build_new_drop_opportunities(
             func.count(func.distinct(Listing.platform)).label("platform_count"),
         )
         .filter(Listing.is_active == True)
+        .filter(Listing.last_seen >= _public_listing_cutoff())
         .group_by(Listing.brand, Listing.model)
         .subquery()
     )
@@ -580,6 +593,7 @@ def _build_new_drop_opportunities(
             ),
         )
         .filter(Listing.is_active == True, Listing.first_seen >= cutoff)
+        .filter(Listing.last_seen >= _public_listing_cutoff())
         .order_by(desc(Listing.first_seen), desc(Listing.drop_pct))
         .all()
     )
@@ -805,6 +819,7 @@ async def get_listings(
 ):
     """Get listings with optional filters. Sorted by biggest drop by default."""
     query = db.query(Listing).filter(Listing.is_active == True)
+    query = query.filter(Listing.last_seen >= _public_listing_cutoff())
 
     if brand:
         query = query.filter(Listing.brand.ilike(f"%{brand}%"))
@@ -841,6 +856,11 @@ async def get_listing(listing_id: str, db: Session = Depends(get_db)):
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
+    if not listing.is_active or listing.last_seen < _public_listing_cutoff():
+        if listing.is_active:
+            listing.is_active = False
+            db.commit()
+        raise HTTPException(status_code=404, detail="Listing not found")
     return listing
 
 
@@ -861,7 +881,7 @@ async def get_brands(db: Session = Depends(get_db)):
     """Get all unique brands"""
     brands = (
         db.query(Listing.brand)
-        .filter(Listing.is_active == True)
+        .filter(_public_listing_condition())
         .distinct()
         .order_by(Listing.brand)
         .all()
@@ -874,7 +894,7 @@ async def get_models_for_brand(brand: str, db: Session = Depends(get_db)):
     """Get all models for a brand"""
     models = (
         db.query(Listing.model)
-        .filter(and_(Listing.brand.ilike(brand), Listing.is_active == True))
+        .filter(_public_listing_condition(Listing.brand.ilike(brand)))
         .distinct()
         .order_by(Listing.model)
         .all()
@@ -905,7 +925,7 @@ async def get_new_drops(
 
     listings = (
         db.query(Listing)
-        .filter(and_(Listing.id.in_(listing_ids), Listing.is_active == True))
+        .filter(_public_listing_condition(Listing.id.in_(listing_ids)))
         .order_by(desc(Listing.drop_pct))
         .limit(limit)
         .all()
@@ -957,11 +977,11 @@ async def recompute_bag_index(
 @app.get("/api/stats")
 async def get_stats(db: Session = Depends(get_db)):
     """Get overall stats for the header display"""
-    total_active = db.query(func.count(Listing.id)).filter(Listing.is_active == True).scalar() or 0
     avg_drop = db.query(func.avg(Listing.drop_pct)).filter(
-        and_(Listing.is_active == True, Listing.drop_pct > 0)
+        _public_listing_condition(Listing.drop_pct > 0)
     ).scalar()
-    biggest_drop = db.query(func.max(Listing.drop_pct)).filter(Listing.is_active == True).scalar()
+    total_active = db.query(func.count(Listing.id)).filter(_public_listing_condition()).scalar() or 0
+    biggest_drop = db.query(func.max(Listing.drop_pct)).filter(_public_listing_condition()).scalar()
     return {
         "total_active_listings": total_active,
         "avg_drop_pct": round(float(avg_drop), 1) if avg_drop else None,
@@ -990,7 +1010,7 @@ async def get_featured_markets(
             average_drop_pct.label("average_drop_pct"),
             biggest_drop_pct.label("biggest_drop_pct"),
         )
-        .filter(Listing.is_active == True)
+        .filter(_public_listing_condition())
         .group_by(Listing.brand, Listing.model)
         .having(listing_count >= min_listings)
         .order_by(desc(listing_count), desc(biggest_drop_pct), Listing.brand, Listing.model)
@@ -1081,8 +1101,7 @@ async def get_market_page(
 
     brand, model = resolved
     base_query = db.query(Listing).filter(
-        and_(
-            Listing.is_active == True,
+        _public_listing_condition(
             Listing.brand == brand,
             Listing.model == model,
         )
@@ -1104,8 +1123,7 @@ async def get_market_page(
             func.max(Listing.drop_pct).label("biggest_drop_pct"),
         )
         .filter(
-            and_(
-                Listing.is_active == True,
+            _public_listing_condition(
                 Listing.brand == brand,
                 Listing.model == model,
             )
@@ -1120,8 +1138,7 @@ async def get_market_page(
             platform_listing_count.label("listing_count"),
         )
         .filter(
-            and_(
-                Listing.is_active == True,
+            _public_listing_condition(
                 Listing.brand == brand,
                 Listing.model == model,
             )
@@ -1163,6 +1180,10 @@ async def track_outbound_click(
 ):
     """Track an outbound click then redirect to the marketplace listing."""
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if listing and (not listing.is_active or listing.last_seen < _public_listing_cutoff()):
+        listing.is_active = False
+        db.commit()
+        raise HTTPException(status_code=410, detail="Listing is no longer active")
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
 
