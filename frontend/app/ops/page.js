@@ -271,7 +271,34 @@ export default async function OpsPage() {
             )}
 
             {topClicks && (
-              <section className="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <section className="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-5">
+                <article className="rounded-2xl border border-gray-800 bg-gray-950 p-5">
+                  <p className="text-[11px] uppercase tracking-[0.25em] text-red-500 mb-2">Top Platforms</p>
+                  <h2 className="text-2xl font-semibold text-white">Which marketplaces monetize the demand</h2>
+                  <div className="mt-5 space-y-3">
+                    {topClicks.platforms.length ? topClicks.platforms.map((item) => (
+                      <div
+                        key={item.platform}
+                        className="flex items-center justify-between rounded-2xl border border-gray-800 bg-black/50 px-4 py-3"
+                      >
+                        <div>
+                          <p className="text-white">{platformLabel(item.platform)}</p>
+                          <p className="text-xs text-gray-500">
+                            {item.unique_listings} listings · {item.unique_markets} markets
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-gray-700 px-3 py-1 text-xs font-mono text-white">
+                          {item.click_count} clicks
+                        </span>
+                      </div>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-gray-800 bg-black/40 px-4 py-5 text-sm text-gray-500">
+                        No marketplace click breakdown yet.
+                      </div>
+                    )}
+                  </div>
+                </article>
+
                 <article className="rounded-2xl border border-gray-800 bg-gray-950 p-5">
                   <p className="text-[11px] uppercase tracking-[0.25em] text-red-500 mb-2">Top Surfaces</p>
                   <h2 className="text-2xl font-semibold text-white">Where BagDrop is producing click intent</h2>

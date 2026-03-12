@@ -227,11 +227,19 @@ class TopClickContextResponse(BaseModel):
     click_count: int
 
 
+class TopClickPlatformResponse(BaseModel):
+    platform: str
+    click_count: int
+    unique_listings: int
+    unique_markets: int
+
+
 class TopClicksResponse(BaseModel):
     generated_at: datetime
     days: int
     listings: List[TopClickedListingResponse]
     markets: List[TopClickedMarketResponse]
+    platforms: List[TopClickPlatformResponse]
     surfaces: List[TopClickSurfaceResponse]
     contexts: List[TopClickContextResponse]
 
@@ -677,6 +685,21 @@ def _build_top_clicks(
         .all()
     )
 
+    platform_rows = (
+        db.query(
+            Listing.platform.label("platform"),
+            func.count(OutboundClick.id).label("click_count"),
+            func.count(func.distinct(OutboundClick.listing_id)).label("unique_listings"),
+            func.count(func.distinct(Listing.brand + "|" + Listing.model)).label("unique_markets"),
+        )
+        .join(Listing, Listing.id == OutboundClick.listing_id)
+        .filter(OutboundClick.created_at >= cutoff)
+        .group_by(Listing.platform)
+        .order_by(desc(func.count(OutboundClick.id)), Listing.platform)
+        .limit(limit)
+        .all()
+    )
+
     surface_rows = (
         db.query(
             OutboundClick.surface.label("surface"),
@@ -734,6 +757,15 @@ def _build_top_clicks(
                 click_count=int(row.click_count or 0),
             )
             for row in market_rows
+        ],
+        platforms=[
+            TopClickPlatformResponse(
+                platform=row.platform,
+                click_count=int(row.click_count or 0),
+                unique_listings=int(row.unique_listings or 0),
+                unique_markets=int(row.unique_markets or 0),
+            )
+            for row in platform_rows
         ],
         surfaces=[
             TopClickSurfaceResponse(

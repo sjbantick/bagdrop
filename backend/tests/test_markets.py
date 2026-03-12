@@ -128,6 +128,44 @@ def test_affiliate_query_for_platform_renders_placeholders():
         settings.rebag_affiliate_query = original
 
 
+def test_compute_bag_index_rows_normalizes_negative_zero_delta():
+    session = make_session()
+    snapshot_time = datetime.utcnow() - timedelta(hours=2)
+    session.add(
+        Listing(
+            id="fashionphile_1",
+            platform="fashionphile",
+            platform_id="1",
+            url="https://example.com/listing/1",
+            brand="Bottega Veneta",
+            model="Andiamo",
+            condition="excellent",
+            current_price=5000,
+            original_price=6200,
+            drop_amount=1200,
+            drop_pct=19.4,
+            is_active=True,
+        )
+    )
+    session.add(
+        BagIndexSnapshot(
+            brand="Bottega Veneta",
+            snapshot_date=snapshot_time,
+            index_value=100.0,
+            peak_avg_price=5000,
+            current_avg_price=5000,
+            active_listings_count=1,
+            avg_drop_pct=19.4,
+        )
+    )
+    session.commit()
+
+    rows = compute_bag_index_rows(session, limit=5, min_active_listings=1, snapshot_time=datetime.utcnow())
+
+    assert rows[0].delta_pct == 0.0
+    assert rows[0].trend == "flat"
+
+
 @pytest.mark.anyio
 async def test_subscribe_to_watchlist_creates_and_deduplicates():
     session = make_session()
@@ -807,6 +845,10 @@ def test_build_top_clicks_summarizes_listings_and_markets():
     assert summary.listings[0].click_count == 2
     assert summary.markets[0].canonical_path == "/chanel/classic-flap"
     assert summary.markets[0].click_count == 3
+    assert summary.platforms[0].platform == "fashionphile"
+    assert summary.platforms[0].click_count == 2
+    assert summary.platforms[0].unique_listings == 1
+    assert summary.platforms[0].unique_markets == 1
     assert summary.surfaces[0].surface == "listing_card"
     assert summary.surfaces[0].unique_listings == 1
     assert summary.surfaces[0].unique_markets == 1

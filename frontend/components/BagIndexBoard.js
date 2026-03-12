@@ -1,4 +1,4 @@
-import { formatCurrency, formatPercent } from '@/lib/format'
+import { formatCurrency, formatPercent, titleCase } from '@/lib/format'
 
 export default function BagIndexBoard({ snapshots = [] }) {
   if (!snapshots.length) {
@@ -42,9 +42,9 @@ export default function BagIndexBoard({ snapshots = [] }) {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-400">Brand</p>
-                  <h3 className="mt-1 text-xl font-semibold text-white">{snapshot.brand}</h3>
+                  <h3 className="mt-1 text-xl font-semibold text-white">{titleCase(snapshot.brand)}</h3>
                   <p className={`mt-2 text-xs font-mono ${trendTone}`}>
-                    {snapshot.delta_pct != null ? `${snapshot.delta_pct > 0 ? '+' : ''}${snapshot.delta_pct} vs last` : trendLabel}
+                    {snapshot.delta_pct != null ? `${snapshot.delta_pct > 0 ? '+' : ''}${snapshot.delta_pct}% vs last` : trendLabel}
                   </p>
                 </div>
                 <div className={`text-right ${tone}`}>

@@ -28,7 +28,10 @@ class BagIndexRow:
 def _round_float(value: Optional[float], digits: int = 1) -> Optional[float]:
     if value is None:
         return None
-    return round(float(value), digits)
+    rounded = round(float(value), digits)
+    if rounded == 0:
+        return 0.0
+    return rounded
 
 
 def _trend_label(delta_pct: Optional[float]) -> str:
@@ -84,7 +87,7 @@ def compute_bag_index_rows(
         index_value = (current_avg_price / peak_avg_price * 100) if peak_avg_price else 100.0
         previous_index_value = float(latest_snapshot.index_value) if latest_snapshot else None
         delta_pct = (
-            round(index_value - previous_index_value, 1)
+            _round_float(index_value - previous_index_value, 1)
             if previous_index_value is not None
             else None
         )
