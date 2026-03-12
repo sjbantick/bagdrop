@@ -20,14 +20,13 @@ const IS_DEVELOPMENT = process.env.NODE_ENV !== 'production'
 async function getOpsSummary(excludeIp) {
   try {
     const params = new URLSearchParams()
-    if (OPS_DASHBOARD_TOKEN) {
-      params.set('token', OPS_DASHBOARD_TOKEN)
-    }
     if (excludeIp) {
       params.set('exclude_ips', excludeIp)
     }
     const query = params.toString()
-    return await fetchApi(`/api/admin/ops-summary${query ? `?${query}` : ''}`)
+    return await fetchApi(`/api/admin/ops-summary${query ? `?${query}` : ''}`, {
+      headers: OPS_DASHBOARD_TOKEN ? { 'x-ops-token': OPS_DASHBOARD_TOKEN } : {},
+    })
   } catch {
     return null
   }
@@ -36,13 +35,12 @@ async function getOpsSummary(excludeIp) {
 async function getTopClicks(excludeIp) {
   try {
     const params = new URLSearchParams({ days: '7', limit: '6' })
-    if (OPS_DASHBOARD_TOKEN) {
-      params.set('token', OPS_DASHBOARD_TOKEN)
-    }
     if (excludeIp) {
       params.set('exclude_ips', excludeIp)
     }
-    return await fetchApi(`/api/admin/clicks/top?${params.toString()}`)
+    return await fetchApi(`/api/admin/clicks/top?${params.toString()}`, {
+      headers: OPS_DASHBOARD_TOKEN ? { 'x-ops-token': OPS_DASHBOARD_TOKEN } : {},
+    })
   } catch {
     return null
   }

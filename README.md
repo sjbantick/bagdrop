@@ -1,4 +1,4 @@
-# BagDrop — bagdrop.xyz
+# BagDrop — thebagdrop.xyz
 
 Real-time luxury handbag price drop tracker. Scans The RealReal, Vestiaire Collective, Fashionphile and Rebag to surface motivated sellers and buying opportunities.
 
@@ -228,7 +228,7 @@ pytest backend/
 ### Ops Check
 Use the lightweight monitoring script against a running BagDrop API:
 ```bash
-python3 scripts/check_ops.py --url http://localhost:8000/api/admin/ops-summary
+python3 scripts/check_ops.py --url http://localhost:8000/api/admin/ops-summary --token "$BAGDROP_OPS_TOKEN"
 ```
 
 Fail if click volume is zero as well:
@@ -269,13 +269,14 @@ The scheduler can also run both loops automatically in production:
 The repo now includes two GitHub Actions workflows:
 
 - `CI` runs backend tests, backend bytecode compilation, and the production frontend build on pushes to `main` and on pull requests.
-- `Ops Check` runs every 6 hours and on demand. It uses the standard-library script above against a live deployment once `BAGDROP_OPS_URL` is configured in GitHub Actions secrets.
+- `Ops Check` runs every 6 hours and on demand. It uses the standard-library script above against a live deployment once `BAGDROP_OPS_URL` and `BAGDROP_OPS_TOKEN` are configured in GitHub Actions.
 
 Frontend production deploys are handled by Vercel's native GitHub integration rather than GitHub Actions.
 
 Recommended GitHub configuration after deployment:
 ```text
-Secret: BAGDROP_OPS_URL=https://api.bagdrop.xyz/api/admin/ops-summary
+Secret: BAGDROP_OPS_URL=https://bagdrop-api-production.up.railway.app/api/admin/ops-summary
+Secret: BAGDROP_OPS_TOKEN=<same backend ops token>
 Variable (optional): BAGDROP_REQUIRE_CLICKS=true
 ```
 
@@ -372,8 +373,8 @@ npm start
 
 ## Next Steps (Priority Order)
 
-1. **Finish frontend/domain cutover** — Attach `bagdrop.xyz` in Vercel and remove the current SSO-protected alias bottleneck
-2. **Configure production monitoring** — Set `BAGDROP_OPS_URL` and let the scheduled ops check watch the live stack
+1. **Finish domain/SEO cleanup** — Ensure all canonical, robots, and sitemap surfaces resolve to `thebagdrop.xyz`
+2. **Configure production monitoring** — Set `BAGDROP_OPS_URL` and `BAGDROP_OPS_TOKEN` and let the scheduled ops check watch the live stack
 3. **Wire SMTP in production** — Set `PUBLIC_API_URL`, `ALERT_FROM_EMAIL`, SMTP credentials, and enable the scheduled alert/digest jobs
 4. **Add affiliate parameters** — Seed live partner query templates on the tracked redirect flow
 5. **Deepen retention/share loops** — Build digest and social flows on top of `/intel` and the intelligence stack

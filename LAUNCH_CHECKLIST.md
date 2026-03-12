@@ -27,16 +27,17 @@ REDIS_URL=<Railway Redis connection string>
 API_HOST=0.0.0.0
 API_PORT=8000
 DEBUG=false
-PUBLIC_APP_URL=https://bagdrop.xyz
-PUBLIC_API_URL=https://api.bagdrop.xyz
+PUBLIC_APP_URL=https://thebagdrop.xyz
+PUBLIC_API_URL=https://bagdrop-api-production.up.railway.app
 OUTBOUND_UTM_SOURCE=bagdrop
 REALREAL_AFFILIATE_QUERY=
 VESTIAIRE_AFFILIATE_QUERY=
 FASHIONPHILE_AFFILIATE_QUERY=
 REBAG_AFFILIATE_QUERY=
 WATCH_TOKEN_SECRET=<random long secret>
-ALERT_FROM_EMAIL=alerts@bagdrop.xyz
-ALERT_REPLY_TO=hello@bagdrop.xyz
+ALERT_FROM_EMAIL=alerts@thebagdrop.xyz
+ALERT_REPLY_TO=hello@thebagdrop.xyz
+OPS_DASHBOARD_TOKEN=<random long secret>
 SMTP_HOST=<smtp host>
 SMTP_PORT=587
 SMTP_USERNAME=<smtp username>
@@ -65,7 +66,9 @@ Backend launch checks:
 - Set:
 
 ```text
-NEXT_PUBLIC_API_URL=https://api.bagdrop.xyz
+NEXT_PUBLIC_API_URL=https://bagdrop-api-production.up.railway.app
+NEXT_PUBLIC_SITE_URL=https://thebagdrop.xyz
+OPS_DASHBOARD_TOKEN=<same backend ops token>
 ```
 
 Frontend launch checks:
@@ -79,14 +82,14 @@ Frontend launch checks:
 
 ## 3. Domain Cutover
 
-- Point `bagdrop.xyz` to the frontend deployment.
-- Point `api.bagdrop.xyz` to the backend deployment.
+- Point `thebagdrop.xyz` to the frontend deployment.
+- Keep the Railway backend on `bagdrop-api-production.up.railway.app` unless a custom API domain is added on a higher plan.
 - Force HTTPS on both hosts.
 - Re-test:
-  - `https://bagdrop.xyz`
-  - `https://bagdrop.xyz/sitemap.xml`
-  - `https://api.bagdrop.xyz/health`
-  - `https://api.bagdrop.xyz/api/admin/ops-summary`
+  - `https://thebagdrop.xyz`
+  - `https://thebagdrop.xyz/sitemap.xml`
+  - `https://bagdrop-api-production.up.railway.app/health`
+  - `https://bagdrop-api-production.up.railway.app/api/admin/ops-summary`
 
 ## 4. GitHub Actions Configuration
 
@@ -98,7 +101,8 @@ The repo now contains:
 Configure these in GitHub after production URLs are stable:
 
 ```text
-Secret: BAGDROP_OPS_URL=https://api.bagdrop.xyz/api/admin/ops-summary
+Secret: BAGDROP_OPS_URL=https://bagdrop-api-production.up.railway.app/api/admin/ops-summary
+Secret: BAGDROP_OPS_TOKEN=<same backend ops token>
 Variable (optional): BAGDROP_REQUIRE_CLICKS=true
 ```
 
@@ -125,14 +129,14 @@ Verification:
 - click a marketplace CTA from a listing detail page
 - confirm BagDrop logs the click first, then redirects with UTM params
 - confirm affiliate params survive on the outbound URL
-- confirm watchlist emails contain unsubscribe links that resolve against `api.bagdrop.xyz`
+- confirm watchlist emails contain unsubscribe links that resolve against `bagdrop-api-production.up.railway.app`
 
 ## 6. Smoke Test Path
 
 Run these checks immediately after deployment:
 
 ```bash
-python3 scripts/check_ops.py --url https://api.bagdrop.xyz/api/admin/ops-summary
+python3 scripts/check_ops.py --url https://bagdrop-api-production.up.railway.app/api/admin/ops-summary --token "$BAGDROP_OPS_TOKEN"
 ```
 
 Then manually verify:

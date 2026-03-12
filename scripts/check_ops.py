@@ -5,13 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
-def fetch_summary(url: str) -> dict:
-    with urlopen(url, timeout=15) as response:
+def fetch_summary(url: str, token: str = "") -> dict:
+    headers = {}
+    if token:
+        headers["x-ops-token"] = token
+    request = Request(url, headers=headers)
+    with urlopen(request, timeout=15) as response:
         return json.load(response)
 
 
@@ -29,10 +34,15 @@ def main() -> int:
         action="store_true",
         help="Fail when 24h outbound click volume is zero.",
     )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("BAGDROP_OPS_TOKEN", ""),
+        help="Optional ops token sent as x-ops-token (or set BAGDROP_OPS_TOKEN).",
+    )
     args = parser.parse_args()
 
     try:
-        summary = fetch_summary(args.url)
+        summary = fetch_summary(args.url, token=args.token)
     except HTTPError as exc:
         print(f"ops check failed: HTTP {exc.code} from {args.url}", file=sys.stderr)
         return 2

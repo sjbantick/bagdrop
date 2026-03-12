@@ -63,8 +63,8 @@ BagDrop is past the bare-MVP scaffold stage. The backend, scrapers, scheduler, f
 ## Biggest Remaining Gaps
 
 ### Launch / Ops
-1. Point `bagdrop.xyz` at the deployed frontend
-2. Configure `BAGDROP_OPS_URL` in GitHub Actions once the backend URL is stable
+1. Ensure `thebagdrop.xyz` is the canonical domain across robots, sitemap, and metadata
+2. Configure `BAGDROP_OPS_URL` and `BAGDROP_OPS_TOKEN` in GitHub Actions
 3. Set `PUBLIC_API_URL`, `ALERT_FROM_EMAIL`, SMTP credentials, and scheduler env vars in production
 4. Seed platform-specific affiliate params once accounts are ready
 5. Let the scheduled `Ops Check` workflow monitor production and alert on stale/failed platforms
