@@ -135,7 +135,11 @@ class BaseScraper(ABC):
                 )
                 self.db.add(price_history)
 
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
             return False
         else:
             # Create new listing
@@ -168,7 +172,11 @@ class BaseScraper(ABC):
                 drop_pct=drop_pct,
             )
             self.db.add(price_history)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
             return True
 
     def log_scrape(self, success: bool, listings_found: int, listings_new: int, listings_updated: int, error: Optional[str] = None):
@@ -183,4 +191,8 @@ class BaseScraper(ABC):
             completed_at=datetime.utcnow(),
         )
         self.db.add(scrape)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise

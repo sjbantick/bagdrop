@@ -1,181 +1,85 @@
 # BagDrop Build Status
 
-## ✅ Complete (MVP Foundation Ready)
+## Current State
 
-### Backend Infrastructure
-- [x] FastAPI server with CORS
-- [x] SQLAlchemy ORM models (Listing, PriceHistory, BagIndexSnapshot, VelocityScore, Scrape)
-- [x] PostgreSQL + SQLite support
-- [x] Database connection pooling
-- [x] Configuration system (environment variables)
-- [x] Base scraper class with retry logic, rate limiting, user agent rotation
+BagDrop is past the bare-MVP scaffold stage. The backend, scrapers, scheduler, feed UI, listing detail pages, and canonical brand/model market pages now exist in the repo and build successfully.
 
-### API Endpoints (Ready)
-- [x] GET /api/listings — Filterable, sortable listing feed
-- [x] GET /api/listings/{id} — Single listing details
-- [x] GET /api/listings/{id}/price-history — Price history chart data
-- [x] GET /api/brands — Brand autocomplete
-- [x] GET /api/brands/{brand}/models — Model autocomplete
-- [x] GET /api/new-drops — Last 24h price drops (news feed)
-- [x] GET /api/bag-index — Brand health snapshots
-- [x] POST /api/admin/scrape — Manual trigger
-- [x] Interactive docs at /docs (Swagger UI)
+## Shipped
 
-### Frontend (Next.js 14)
-- [x] Dark theme (black background, red accents, gray borders)
-- [x] Tailwind CSS configured
-- [x] Header component with BagDrop branding
-- [x] Listing card component (image placeholder, price, drop %, platform badge)
-- [x] Filter UI (brand, model, sort by, min drop %)
-- [x] Main feed page pulling from backend API
-- [x] Responsive grid layout (mobile, tablet, desktop)
-- [x] Hover effects and interactive elements
+### Backend
+- [x] FastAPI API with health check, listings feed, listing detail, price history, brands/models, new drops, bag index, stats, and admin scrape trigger
+- [x] SQLAlchemy models for listings, price history, bag index snapshots, velocity scores, and scrape logs
+- [x] Scheduler wiring for recurring scraper runs plus initial scrape on startup
+- [x] Shared slug/canonical-path helpers for SEO market pages
+- [x] Featured market endpoint: `GET /api/markets/featured`
+- [x] Canonical market endpoint: `GET /api/markets/{brand_slug}/{model_slug}`
+- [x] First-party outbound click tracking and redirect endpoint
+- [x] Affiliate-ready outbound query templating with listing and surface placeholders
+- [x] Ops summary endpoint for scraper freshness, last failures, and click activity
+- [x] Top-click analytics endpoint for listings, markets, surfaces, and contexts
 
-### Project Setup
-- [x] Docker Compose for local development
-- [x] Backend Dockerfile
-- [x] Frontend Dockerfile
-- [x] .env.example with all configuration options
-- [x] .gitignore
-- [x] requirements.txt (Python dependencies)
-- [x] package.json (Node dependencies)
-- [x] Comprehensive README
-- [x] CLAUDE.md (project brief)
+### Scrapers
+- [x] Fashionphile scraper
+- [x] Rebag scraper
+- [x] The RealReal scraper
+- [x] Vestiaire scraper
 
----
+### Frontend
+- [x] Main feed with filters, platform tabs, and live stats
+- [x] Internal listing detail page at `/listings/[listingId]`
+- [x] Canonical brand/model market pages at `/[brand]/[model]`
+- [x] Featured markets section on the homepage
+- [x] Price history chart component
+- [x] Brand/model autocomplete in filters
+- [x] `robots.txt` and dynamic sitemap
+- [x] Sitemap now covers canonical market pages and listing detail pages from active inventory
+- [x] Canonical metadata and generated OG images for homepage, market pages, and listing pages
+- [x] Structured data on key owned surfaces: listings, markets, and `/intel`
+- [x] Outbound marketplace CTAs routed through BagDrop tracking
+- [x] Internal ops page at `/ops`
+- [x] `/ops` top-click analytics for listings, markets, surfaces, and contexts
+- [x] Arbitrage radar on the homepage using live market-average deltas
+- [x] BagIndex board on the homepage using live brand-level price health
+- [x] BagIndex scheduler persistence and trend deltas against stored history
+- [x] New-drops radar on the homepage using a scored freshness signal
+- [x] Shareable `/intel` page combining arbitrage, new drops, and BagIndex movers
+- [x] SMTP-ready intelligence digest built from `/intel`
+- [x] Scheduler-backed watchlist alert loop
+- [x] Scheduler-backed intelligence digest loop
+- [x] Market-page velocity score inferred from recent first-seen activity
+- [x] Email watchlist capture on canonical market pages
+- [x] SMTP-ready watchlist alert delivery loop with unsubscribe-safe links, freshness gating, and cooldowns
+- [x] Production Next.js build passing
 
-## ⏳ Next (Priority Order)
+### Verification
+- [x] `python3 -m pytest backend/tests/test_markets.py`
+- [x] `python3 -m compileall backend`
+- [x] `npm run build` in `frontend/`
+- [x] `python3 scripts/check_ops.py --url ...` against a mock ops endpoint
+- [x] GitHub Actions workflows added for CI and scheduled ops checks
+- [x] GitHub Actions workflow added for Vercel frontend deployment
+- [x] Launch checklist captured in `LAUNCH_CHECKLIST.md`
 
-### Phase 1: First Scraper (Day 1-2)
-1. **Implement The RealReal scraper** (`backend/scrapers/realreal.py`)
-   - Parse HTML/API to extract listings
-   - Extract: brand, model, size, color, condition, price, photos
-   - Normalize brand/model names
-   - Save to database via `save_listing()`
+## Biggest Remaining Gaps
 
-2. **Test scraper locally**
-   ```bash
-   python backend/scrapers/realreal.py --test
-   ```
+### Launch / Ops
+1. Point `bagdrop.xyz` at the deployed frontend
+2. Configure `BAGDROP_OPS_URL` in GitHub Actions once the backend URL is stable
+3. Set `PUBLIC_API_URL`, `ALERT_FROM_EMAIL`, SMTP credentials, and scheduler env vars in production
+4. Seed platform-specific affiliate params once accounts are ready
+5. Let the scheduled `Ops Check` workflow monitor production and alert on stale/failed platforms
 
-3. **Wire up APScheduler** (`backend/scheduler.py`)
-   - Run scraper every 4 hours
-   - Log runs to database
-   - Handle failures gracefully
+### Product
+1. Seed live partner query templates on top of the tracked redirect path
+2. Add throttling and stronger rules on top of the watchlist and intelligence digest loops
+3. Add structured data and other SEO polish for owned surfaces
 
-### Phase 2: Deploy MVP (Day 3)
-1. Set up Railway or Render account
-2. Push code to GitHub
-3. Configure PostgreSQL on Railway
-4. Configure Redis on Railway
-5. Deploy backend → `https://bagdrop-api.railway.app`
-6. Deploy frontend → `https://bagdrop.xyz`
-7. Update NEXT_PUBLIC_API_URL in frontend
+### SEO / Growth
+1. Add editorial landing pages for top models and brands
+2. Improve structured data once production URLs are fixed
 
-### Phase 3: More Scrapers (Day 4-5)
-1. Vestiaire Collective scraper
-2. Fashionphile scraper
-3. Rebag scraper
-4. Verify data quality across all platforms
+## Recommended Next Move
 
-### Phase 4: Intelligence Features (Day 6-7)
-1. **Price drop detection** — Flag >10% drops
-2. **Cross-platform arbitrage** — Same bag, different prices
-3. **Velocity scoring** — Relisting frequency = distress signal
-4. **BagIndex** — Weekly aggregate price health per brand
+The highest-value next step is the frontend/domain cutover. The backend is now live on Railway, the product has enough owned-page surface area to justify pushing it live and indexing it, and the repo has enough CI and scheduling scaffolding to support that launch.
 
-### Phase 5: Growth (Week 2)
-1. **SEO landing pages** — `/chanel/classic-flap`, etc.
-2. **Email digest** — Weekly top 10 drops
-3. **Social share cards** — OG image generation per listing
-4. **Outreach** — Contact 50 bag investment YouTubers/TikTokers
-
-### Phase 6: Monetization (Week 2-3)
-1. **Affiliate links** — RealReal, Vestiaire, Fashionphile, Rebag
-2. **Premium alerts** — Stripe subscription ($9/mo for custom watchlists)
-3. **B2B API** — Data access for resellers ($99/mo)
-
----
-
-## Quick Start
-
-```bash
-# Install dependencies
-cd ~/Downloads/bagdrop
-docker-compose up --build
-
-# In another terminal, once backend is running:
-# Create first listing manually to test
-curl -X POST http://localhost:8000/api/admin/seed
-
-# View at http://localhost:3000
-```
-
----
-
-## Tech Stack Summary
-- **Backend:** FastAPI, SQLAlchemy, PostgreSQL, Redis, Playwright/httpx, APScheduler
-- **Frontend:** Next.js 14, React 18, Tailwind CSS
-- **Deployment:** Docker → Railway/Render
-- **Domain:** bagdrop.xyz (not yet registered/deployed)
-
----
-
-## Key Decisions
-1. **SQLite for dev, PostgreSQL for prod** — Easy local development
-2. **FastAPI** — Modern, fast, auto docs
-3. **Next.js** — Best-in-class React framework
-4. **Dark theme** — Matches panicselling.xyz aesthetic, fits luxury/urgency
-5. **No auth yet** — MVP is public, premium features later
-6. **CSV/JSON exports** — No B2B API until after MVP
-
----
-
-## File Structure
-```
-bagdrop/
-├── CLAUDE.md
-├── README.md
-├── BUILD_STATUS.md (this file)
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── backend/
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   ├── config.py
-│   ├── database.py
-│   ├── models.py
-│   ├── main.py
-│   └── scrapers/
-│       ├── __init__.py
-│       └── base.py
-├── frontend/
-│   ├── package.json
-│   ├── next.config.js
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── Dockerfile
-│   ├── app/
-│   │   ├── layout.js
-│   │   ├── page.js
-│   │   └── globals.css
-│   └── components/
-│       ├── Header.js
-│       ├── Filters.js
-│       └── ListingCard.js
-```
-
----
-
-## What's Ready to Build Next
-- The database schema is complete
-- The API is 100% ready (no scraper data yet)
-- The frontend UI is ready
-- All infrastructure is Docker-ized
-
-**Next action:** Implement The RealReal scraper in `backend/scrapers/realreal.py` and test with real data.
-
----
-
-Last updated: March 9, 2026
+Last updated: March 12, 2026

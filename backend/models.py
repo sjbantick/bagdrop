@@ -2,7 +2,7 @@
 from datetime import datetime
 from enum import Enum
 from sqlalchemy import Column, String, Float, Integer, DateTime, Boolean, Index, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
@@ -36,7 +36,7 @@ class Listing(Base):
 
     # Bag details
     brand = Column(String(100), nullable=False, index=True)
-    model = Column(String(100), nullable=False, index=True)
+    model = Column(Text, nullable=False, index=True)
     size = Column(String(50))
     color = Column(String(100), index=True)
     hardware = Column(String(100))
@@ -115,7 +115,7 @@ class VelocityScore(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     brand = Column(String(100), nullable=False, index=True)
-    model = Column(String(100), nullable=False, index=True)
+    model = Column(Text, nullable=False, index=True)
 
     calculated_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
@@ -148,3 +148,62 @@ class Scrape(Base):
 
     success = Column(Boolean, default=False)
     error_message = Column(Text)
+
+
+class OutboundClick(Base):
+    """Tracked outbound marketplace click for attribution and affiliate routing."""
+    __tablename__ = "outbound_clicks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    listing_id = Column(String(255), nullable=False, index=True)
+    platform = Column(String(50), nullable=False, index=True)
+    surface = Column(String(100), nullable=False, index=True)
+    context = Column(String(100))
+
+    target_url = Column(String(2000), nullable=False)
+    referer = Column(String(2000))
+    user_agent = Column(Text)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_outbound_listing_surface', 'listing_id', 'surface', 'created_at'),
+    )
+
+
+class WatchSubscription(Base):
+    """Email-based market watch intent captured before full alerting is built."""
+    __tablename__ = "watch_subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), nullable=False, index=True)
+    brand = Column(String(100), nullable=False, index=True)
+    model = Column(Text, nullable=False, index=True)
+    brand_slug = Column(String(120), nullable=False, index=True)
+    model_slug = Column(String(120), nullable=False, index=True)
+    source = Column(String(100), nullable=False, default="unknown")
+
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_notified_at = Column(DateTime)
+
+    __table_args__ = (
+        Index('idx_watch_email_market', 'email', 'brand_slug', 'model_slug', unique=True),
+        Index('idx_watch_market', 'brand_slug', 'model_slug', 'is_active'),
+    )
+
+
+class WatchAlertDelivery(Base):
+    """Delivery log so BagDrop only alerts new listings once per watch subscription."""
+    __tablename__ = "watch_alert_deliveries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    watch_subscription_id = Column(Integer, nullable=False, index=True)
+    listing_id = Column(String(255), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('idx_watch_delivery_unique', 'watch_subscription_id', 'listing_id', unique=True),
+    )

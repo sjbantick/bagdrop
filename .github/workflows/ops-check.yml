@@ -1,0 +1,43 @@
+name: Ops Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  ops-check:
+    name: Production ops check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate configuration
+        env:
+          BAGDROP_OPS_URL: ${{ secrets.BAGDROP_OPS_URL }}
+        run: |
+          if [ -z "${BAGDROP_OPS_URL}" ]; then
+            echo "BAGDROP_OPS_URL is not configured; skipping scheduled ops check."
+            exit 0
+          fi
+
+      - name: Run ops check
+        env:
+          BAGDROP_OPS_URL: ${{ secrets.BAGDROP_OPS_URL }}
+          BAGDROP_REQUIRE_CLICKS: ${{ vars.BAGDROP_REQUIRE_CLICKS }}
+        run: |
+          if [ "${BAGDROP_REQUIRE_CLICKS}" = "true" ]; then
+            python scripts/check_ops.py --url "${BAGDROP_OPS_URL}" --require-clicks
+          else
+            python scripts/check_ops.py --url "${BAGDROP_OPS_URL}"
+          fi

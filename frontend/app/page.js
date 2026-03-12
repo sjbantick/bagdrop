@@ -4,11 +4,18 @@ import { useState, useEffect } from 'react'
 import ListingCard from '@/components/ListingCard'
 import Header from '@/components/Header'
 import Filters from '@/components/Filters'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import FeaturedMarkets from '@/components/FeaturedMarkets'
+import ArbitrageRadar from '@/components/ArbitrageRadar'
+import BagIndexBoard from '@/components/BagIndexBoard'
+import NewDropsRadar from '@/components/NewDropsRadar'
+import { getApiUrl } from '@/lib/api'
 
 export default function Home() {
   const [listings, setListings] = useState([])
+  const [featuredMarkets, setFeaturedMarkets] = useState([])
+  const [arbitrageOpportunities, setArbitrageOpportunities] = useState([])
+  const [bagIndex, setBagIndex] = useState([])
+  const [newDrops, setNewDrops] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
@@ -32,7 +39,7 @@ export default function Home() {
       if (filters.model) params.append('model', filters.model)
       if (filters.platform) params.append('platform', filters.platform)
 
-      const response = await fetch(`${API_URL}/api/listings?${params}`)
+      const response = await fetch(getApiUrl(`/api/listings?${params}`))
       const data = await response.json()
       setListings(data)
     } catch (error) {
@@ -44,7 +51,7 @@ export default function Home() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/stats`)
+      const response = await fetch(getApiUrl('/api/stats'))
       const data = await response.json()
       setStats(data)
     } catch (error) {
@@ -52,8 +59,52 @@ export default function Home() {
     }
   }
 
+  const fetchFeaturedMarkets = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/markets/featured?limit=6&min_listings=2'))
+      const data = await response.json()
+      setFeaturedMarkets(data)
+    } catch (error) {
+      console.error('Failed to fetch featured markets:', error)
+    }
+  }
+
+  const fetchArbitrageOpportunities = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/opportunities/arbitrage?limit=6&min_gap_pct=15'))
+      const data = await response.json()
+      setArbitrageOpportunities(data)
+    } catch (error) {
+      console.error('Failed to fetch arbitrage opportunities:', error)
+    }
+  }
+
+  const fetchBagIndex = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/bag-index?limit=6&live=true&min_active_listings=2'))
+      const data = await response.json()
+      setBagIndex(data)
+    } catch (error) {
+      console.error('Failed to fetch BagIndex:', error)
+    }
+  }
+
+  const fetchNewDrops = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/opportunities/new-drops?limit=6&hours=72&min_significance=40'))
+      const data = await response.json()
+      setNewDrops(data)
+    } catch (error) {
+      console.error('Failed to fetch new drops:', error)
+    }
+  }
+
   useEffect(() => {
     fetchStats()
+    fetchFeaturedMarkets()
+    fetchArbitrageOpportunities()
+    fetchBagIndex()
+    fetchNewDrops()
     const interval = setInterval(fetchStats, 60000) // refresh stats every minute
     return () => clearInterval(interval)
   }, [])
@@ -88,6 +139,11 @@ export default function Home() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        <FeaturedMarkets markets={featuredMarkets} />
+        <ArbitrageRadar opportunities={arbitrageOpportunities} />
+        <BagIndexBoard snapshots={bagIndex} />
+        <NewDropsRadar opportunities={newDrops} />
+
         <Filters filters={filters} setFilters={setFilters} />
 
         {loading ? (
