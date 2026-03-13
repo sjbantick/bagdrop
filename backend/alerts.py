@@ -232,7 +232,16 @@ def deliver_watch_alerts(
             if not settings.alert_from_email or not settings.smtp_host:
                 raise RuntimeError("SMTP is not configured for watchlist alert delivery")
 
-            send_email_via_smtp(item.subscription.email, subject, text_body, html_body)
+            try:
+                send_email_via_smtp(item.subscription.email, subject, text_body, html_body)
+            except smtplib.SMTPRecipientsRefused as exc:
+                # Bad recipient address — skip this subscription, log, continue the batch
+                print(f"[alerts] Skipping {item.subscription.email}: recipient refused ({exc})")
+                continue
+            except (smtplib.SMTPException, ssl.SSLError, OSError) as exc:
+                # SMTP/TLS infrastructure failure — abort entire batch with context
+                print(f"[alerts] SMTP failure delivering to {item.subscription.email}: {exc}")
+                raise RuntimeError(f"SMTP delivery failed: {exc}") from exc
 
             now = datetime.utcnow()
             for listing in item.listings:

@@ -47,19 +47,27 @@ class BaseScraper(ABC):
         }
 
     async def fetch(self, url: str) -> Optional[str]:
-        """Fetch a URL with retry logic"""
+        """Fetch a URL with retry logic and explicit 429 rate-limit handling."""
         for attempt in range(settings.scraper_retry_count):
             try:
                 await asyncio.sleep(settings.scraper_rate_limit_delay)
                 response = await self.http_client.get(url, headers=self.get_headers(), follow_redirects=True)
                 if response.status_code == 200:
                     return response.text
+                elif response.status_code == 429:
+                    # Rate limited — exponential backoff before retry (4s, 8s, 16s)
+                    backoff = 2 ** (attempt + 2)
+                    print(f"[{self.platform}] Rate limited on {url} (attempt {attempt + 1}/{settings.scraper_retry_count}), backing off {backoff}s")
+                    if attempt < settings.scraper_retry_count - 1:
+                        await asyncio.sleep(backoff)
+                    else:
+                        print(f"[{self.platform}] Rate limit persisted after all retries: {url}")
                 else:
-                    print(f"Failed to fetch {url}: {response.status_code}")
+                    print(f"[{self.platform}] Failed to fetch {url}: HTTP {response.status_code}")
             except Exception as e:
-                print(f"Error fetching {url} (attempt {attempt + 1}): {e}")
+                print(f"[{self.platform}] Error fetching {url} (attempt {attempt + 1}): {e}")
                 if attempt < settings.scraper_retry_count - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2 ** attempt)
         return None
 
     async def fetch_with_browser(

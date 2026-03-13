@@ -78,3 +78,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Guard: refuse to start in production with the dev-default token secret
+if not settings.debug and settings.watch_token_secret == "bagdrop-dev-watch-secret":
+    raise RuntimeError(
+        "WATCH_TOKEN_SECRET must be set to a unique secret in production. "
+        "Set it in your Railway environment variables."
+    )

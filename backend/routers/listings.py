@@ -1,0 +1,386 @@
+"""Listing feed, detail, outbound click tracking, and brand/model routes."""
+import re
+from datetime import datetime, timedelta
+from typing import List, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
+from sqlalchemy import and_, desc, func, or_
+from sqlalchemy.orm import Session
+
+from config import settings
+from database import get_db
+from deps import _extract_client_ip, _public_listing_condition, _public_listing_cutoff
+from models import Listing, ListingReport, OutboundClick, PriceHistory
+from schemas import (
+    ListingReportRequest,
+    ListingReportResponse,
+    ListingResponse,
+    PriceHistoryResponse,
+)
+from utils import slugify_text
+
+router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Affiliate URL helpers
+# ---------------------------------------------------------------------------
+
+def _render_affiliate_template(value: str, replacements: Optional[dict] = None) -> str:
+    if not replacements:
+        return value
+
+    def replace(match: re.Match) -> str:
+        return str(replacements.get(match.group(1), ""))
+
+    return re.sub(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", replace, value)
+
+
+def _affiliate_query_for_platform(
+    platform: str,
+    replacements: Optional[dict] = None,
+) -> dict:
+    query_string = {
+        "realreal": settings.realreal_affiliate_query,
+        "vestiaire": settings.vestiaire_affiliate_query,
+        "fashionphile": settings.fashionphile_affiliate_query,
+        "rebag": settings.rebag_affiliate_query,
+    }.get(platform, "")
+
+    normalized = query_string.lstrip("?").strip()
+    if not normalized:
+        return {}
+
+    params = dict(parse_qsl(normalized, keep_blank_values=True))
+    return {
+        key: _render_affiliate_template(value, replacements)
+        for key, value in params.items()
+    }
+
+
+def _build_outbound_target_url(listing: Listing, surface: str, context: Optional[str] = None) -> str:
+    split = urlsplit(listing.url)
+    query = dict(parse_qsl(split.query, keep_blank_values=True))
+    replacements = {
+        "brand": listing.brand or "",
+        "brand_slug": slugify_text(listing.brand or ""),
+        "context": context or "",
+        "listing_id": listing.id or "",
+        "market_slug": f"{slugify_text(listing.brand or '')}/{slugify_text(listing.model or '')}",
+        "model": listing.model or "",
+        "model_slug": slugify_text(listing.model or ""),
+        "platform": listing.platform or "",
+        "platform_id": listing.platform_id or "",
+        "surface": surface or "",
+        "utm_source": settings.outbound_utm_source,
+    }
+    query.update(_affiliate_query_for_platform(listing.platform, replacements))
+    query.setdefault("utm_source", settings.outbound_utm_source)
+    query.setdefault("utm_medium", "marketplace_click")
+    query.setdefault("utm_campaign", listing.platform)
+    query["utm_content"] = surface
+    if context:
+        query["utm_term"] = context
+
+    return urlunsplit((
+        split.scheme,
+        split.netloc,
+        split.path,
+        urlencode(query, doseq=True),
+        split.fragment,
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Report helpers
+# ---------------------------------------------------------------------------
+
+def _normalize_listing_report_reason(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    allowed = {"sold", "dead", "broken"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid listing report reason")
+    return normalized
+
+
+def _normalize_listing_report_notes(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized[:500]
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@router.get("/api/listings", response_model=List[ListingResponse])
+async def get_listings(
+    db: Session = Depends(get_db),
+    brand: Optional[str] = Query(None),
+    model: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None),
+    min_drop_pct: Optional[float] = Query(0),
+    max_drop_pct: Optional[float] = Query(100),
+    sort_by: str = Query("drop_pct", pattern="^(drop_pct|drop_amount|current_price|last_seen)$"),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0),
+):
+    """Get listings with optional filters. Sorted by biggest drop by default."""
+    query = db.query(Listing).filter(Listing.is_active == True)
+    query = query.filter(Listing.last_seen >= _public_listing_cutoff())
+
+    if brand:
+        query = query.filter(Listing.brand.ilike(f"%{brand}%"))
+    if model:
+        query = query.filter(Listing.model.ilike(f"%{model}%"))
+    if platform:
+        query = query.filter(Listing.platform == platform)
+
+    if min_drop_pct is not None or max_drop_pct is not None:
+        if min_drop_pct is not None:
+            query = query.filter(Listing.drop_pct >= min_drop_pct)
+        if max_drop_pct is not None:
+            query = query.filter(Listing.drop_pct <= max_drop_pct)
+
+    if sort_by == "drop_pct":
+        query = query.order_by(desc(Listing.drop_pct))
+    elif sort_by == "drop_amount":
+        query = query.order_by(desc(Listing.drop_amount))
+    elif sort_by == "current_price":
+        query = query.order_by(desc(Listing.current_price))
+    elif sort_by == "last_seen":
+        query = query.order_by(desc(Listing.last_seen))
+
+    return query.limit(limit).offset(offset).all()
+
+
+@router.get("/api/listings/{listing_id}", response_model=ListingResponse)
+async def get_listing(listing_id: str, db: Session = Depends(get_db)):
+    """Get a specific listing."""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if not listing.is_active or listing.last_seen < _public_listing_cutoff():
+        if listing.is_active:
+            listing.is_active = False
+            db.commit()
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return listing
+
+
+@router.get("/api/listings/{listing_id}/price-history", response_model=List[PriceHistoryResponse])
+async def get_listing_price_history(listing_id: str, db: Session = Depends(get_db)):
+    """Get price history for a listing."""
+    return (
+        db.query(PriceHistory)
+        .filter(PriceHistory.listing_id == listing_id)
+        .order_by(PriceHistory.detected_at)
+        .all()
+    )
+
+
+@router.get("/api/listings/{listing_id}/outbound")
+async def track_outbound_click(
+    listing_id: str,
+    request: Request,
+    surface: str = Query("unknown", min_length=1, max_length=100),
+    context: Optional[str] = Query(None, max_length=100),
+    db: Session = Depends(get_db),
+):
+    """Track an outbound click then redirect to the marketplace listing."""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if listing and (not listing.is_active or listing.last_seen < _public_listing_cutoff()):
+        listing.is_active = False
+        db.commit()
+        raise HTTPException(status_code=410, detail="Listing is no longer active")
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    target_url = _build_outbound_target_url(listing, surface=surface, context=context)
+    click = OutboundClick(
+        listing_id=listing.id,
+        platform=listing.platform,
+        surface=surface,
+        context=context,
+        target_url=target_url,
+        referer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        client_ip=_extract_client_ip(request),
+    )
+    db.add(click)
+    db.commit()
+
+    return RedirectResponse(url=target_url, status_code=307)
+
+
+@router.post("/api/listings/{listing_id}/report", response_model=ListingReportResponse)
+async def report_listing_issue(
+    listing_id: str,
+    payload: ListingReportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Capture dead-listing feedback and quarantine suspicious inventory quickly."""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    now = datetime.utcnow()
+    reason = _normalize_listing_report_reason(payload.reason)
+    source = (payload.source or "unknown").strip()[:100] or "unknown"
+    notes = _normalize_listing_report_notes(payload.notes)
+    reporter_ip = _extract_client_ip(request)
+    user_agent = request.headers.get("user-agent")
+
+    if reporter_ip:
+        daily_limit_cutoff = now - timedelta(hours=24)
+        daily_ip_reports = (
+            db.query(func.count(ListingReport.id))
+            .filter(
+                and_(
+                    ListingReport.reporter_ip == reporter_ip,
+                    ListingReport.created_at >= daily_limit_cutoff,
+                )
+            )
+            .scalar()
+            or 0
+        )
+        if daily_ip_reports >= max(settings.listing_report_ip_daily_limit, 1):
+            raise HTTPException(status_code=429, detail="Too many listing reports from this IP")
+
+    dedupe_cutoff = now - timedelta(hours=max(settings.listing_report_dedupe_hours, 1))
+    duplicate_matchers = []
+    if reporter_ip:
+        duplicate_matchers.append(ListingReport.reporter_ip == reporter_ip)
+    if user_agent:
+        duplicate_matchers.append(ListingReport.user_agent == user_agent)
+
+    recent_duplicate = None
+    if duplicate_matchers:
+        recent_duplicate = (
+            db.query(ListingReport)
+            .filter(
+                and_(
+                    ListingReport.listing_id == listing.id,
+                    ListingReport.reason == reason,
+                    ListingReport.created_at >= dedupe_cutoff,
+                    or_(*duplicate_matchers),
+                )
+            )
+            .order_by(desc(ListingReport.created_at))
+            .first()
+        )
+
+    if not recent_duplicate:
+        report = ListingReport(
+            listing_id=listing.id,
+            platform=listing.platform,
+            reason=reason,
+            source=source,
+            notes=notes,
+            reporter_ip=reporter_ip,
+            user_agent=user_agent,
+        )
+        db.add(report)
+        db.flush()
+
+    report_cutoff = now - timedelta(days=7)
+    report_count_7d = (
+        db.query(func.count(ListingReport.id))
+        .filter(
+            and_(
+                ListingReport.listing_id == listing.id,
+                ListingReport.created_at >= report_cutoff,
+            )
+        )
+        .scalar()
+        or 0
+    )
+
+    stale_quarantine_cutoff = now - timedelta(
+        hours=max(settings.listing_report_stale_quarantine_hours, 1)
+    )
+    should_hide = report_count_7d >= max(settings.listing_report_auto_hide_threshold, 1) or (
+        listing.last_seen < stale_quarantine_cutoff
+    )
+
+    if should_hide and listing.is_active:
+        listing.is_active = False
+
+    db.commit()
+
+    detail = (
+        "Thanks. BagDrop hid this listing while the feed catches up."
+        if should_hide
+        else (
+            "Thanks. BagDrop already logged this report recently and will keep watching the listing."
+            if recent_duplicate
+            else "Thanks. BagDrop logged the report and will watch this listing closely."
+        )
+    )
+
+    return ListingReportResponse(
+        listing_id=listing.id,
+        reason=reason,
+        source=source,
+        report_count_7d=report_count_7d,
+        listing_hidden=bool(should_hide),
+        detail=detail,
+    )
+
+
+@router.get("/api/brands")
+async def get_brands(db: Session = Depends(get_db)):
+    """Get all unique brands."""
+    brands = (
+        db.query(Listing.brand)
+        .filter(_public_listing_condition())
+        .distinct()
+        .order_by(Listing.brand)
+        .all()
+    )
+    return [b[0] for b in brands]
+
+
+@router.get("/api/brands/{brand}/models")
+async def get_models_for_brand(brand: str, db: Session = Depends(get_db)):
+    """Get all models for a brand."""
+    models = (
+        db.query(Listing.model)
+        .filter(_public_listing_condition(Listing.brand.ilike(brand)))
+        .distinct()
+        .order_by(Listing.model)
+        .all()
+    )
+    return [m[0] for m in models]
+
+
+@router.get("/api/new-drops", response_model=List[ListingResponse])
+async def get_new_drops(
+    hours: int = Query(24, ge=1, le=168),
+    limit: int = Query(50, le=500),
+    db: Session = Depends(get_db),
+):
+    """Get new drops in the last N hours (detected_at in price_history)."""
+    time_cutoff = datetime.utcnow() - timedelta(hours=hours)
+    recent_listing_ids = (
+        db.query(PriceHistory.listing_id)
+        .filter(PriceHistory.detected_at >= time_cutoff)
+        .distinct()
+        .all()
+    )
+    listing_ids = [lid[0] for lid in recent_listing_ids]
+    if not listing_ids:
+        return []
+    return (
+        db.query(Listing)
+        .filter(_public_listing_condition(Listing.id.in_(listing_ids)))
+        .order_by(desc(Listing.drop_pct))
+        .limit(limit)
+        .all()
+    )

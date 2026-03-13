@@ -68,6 +68,8 @@ class Listing(Base):
         Index('idx_platform_id', 'platform', 'platform_id', unique=True),
         Index('idx_last_seen', 'last_seen'),
         Index('idx_drop_pct', 'drop_pct'),
+        # Composite index for the main feed query: WHERE is_active=True ORDER BY drop_pct DESC
+        Index('idx_active_drop_pct', 'is_active', 'drop_pct'),
     )
 
 

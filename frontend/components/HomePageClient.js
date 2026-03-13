@@ -101,6 +101,11 @@ export default function HomePageClient({
             <span>
               <span className="text-stone-900">{stats.total_active_listings?.toLocaleString()}</span> active drops
             </span>
+            {stats.drops_today > 0 && (
+              <span>
+                <span className="text-pink-600 font-semibold">{stats.drops_today.toLocaleString()}</span> dropped today
+              </span>
+            )}
             {stats.avg_drop_pct && (
               <span>
                 avg drop: <span className="text-pink-600">-{stats.avg_drop_pct}%</span>
