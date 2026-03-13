@@ -1720,6 +1720,45 @@ async def hydrate_rebag_handles(
     )
 
 
+@app.post("/api/admin/normalize-brands")
+async def normalize_brands_route(
+    _: None = Depends(_require_ops_access),
+    db: Session = Depends(get_db),
+):
+    """Fix brand name casing in place for all existing listings and bag-index snapshots."""
+    from scrapers.base import BaseScraper
+
+    class _Norm(BaseScraper):
+        platform = None
+        base_url = ""
+        async def scrape(self, db): pass
+
+    norm = _Norm.__new__(_Norm)
+
+    listings = db.query(Listing).all()
+    listing_updates = 0
+    for listing in listings:
+        fixed = norm.normalize_brand(listing.brand or "")
+        if fixed != listing.brand:
+            listing.brand = fixed
+            listing_updates += 1
+
+    snapshots = db.query(BagIndexSnapshot).all()
+    snapshot_updates = 0
+    for snap in snapshots:
+        fixed = norm.normalize_brand(snap.brand or "")
+        if fixed != snap.brand:
+            snap.brand = fixed
+            snapshot_updates += 1
+
+    db.commit()
+    return {
+        "listings_updated": listing_updates,
+        "snapshots_updated": snapshot_updates,
+        "total_listings": len(listings),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 

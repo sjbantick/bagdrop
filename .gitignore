@@ -68,3 +68,4 @@ Thumbs.db
 # Keep frontend source helpers tracked
 !frontend/lib/
 !frontend/lib/**
+.vercel
