@@ -34,6 +34,7 @@ jobs:
       - name: Run ops check
         env:
           BAGDROP_OPS_URL: ${{ secrets.BAGDROP_OPS_URL }}
+          BAGDROP_OPS_TOKEN: ${{ secrets.BAGDROP_OPS_TOKEN }}
           BAGDROP_REQUIRE_CLICKS: ${{ vars.BAGDROP_REQUIRE_CLICKS }}
         run: |
           if [ -z "${BAGDROP_OPS_URL}" ]; then
