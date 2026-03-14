@@ -340,3 +340,22 @@ class CrossPlatformCompareResponse(BaseModel):
     canonical_path: str
     summary: CrossPlatformSummaryResponse
     platforms: List[PlatformCompareResponse]
+
+
+class ConditionFairValueResponse(BaseModel):
+    condition: str
+    listing_count: int
+    avg_price: float
+    min_price: float
+    median_price: float
+    fair_value_estimate: float
+    condition_adjustment_pct: float
+
+
+class MarketFairValueResponse(BaseModel):
+    brand: str
+    model: str
+    canonical_path: str
+    overall_avg_price: float
+    total_listings: int
+    conditions: List[ConditionFairValueResponse]

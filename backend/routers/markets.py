@@ -11,9 +11,11 @@ from database import get_db
 from deps import _public_listing_condition, _public_listing_cutoff, _round_float
 from models import Listing, PriceHistory
 from schemas import (
+    ConditionFairValueResponse,
     CrossPlatformCompareResponse,
     CrossPlatformSummaryResponse,
     FeaturedMarketResponse,
+    MarketFairValueResponse,
     MarketResponse,
     MarketStatsResponse,
     MarketVelocityResponse,
@@ -362,6 +364,105 @@ async def get_market_cross_platform_compare(
         platforms=platforms,
     )
     await cache_set(cache_key, result.model_dump(), ttl=300)
+    return result
+
+
+@router.get("/api/markets/{brand_slug}/{model_slug}/fair-value", response_model=MarketFairValueResponse)
+async def get_market_fair_value(
+    brand_slug: str,
+    model_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Condition-adjusted fair value estimates for a brand/model market."""
+    cache_key = f"bagdrop:v1:fair-value:{brand_slug}:{model_slug}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    resolved = _resolve_market(db, brand_slug, model_slug)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Market not found")
+    brand, model = resolved
+
+    # Query all active listings grouped by condition
+    rows = (
+        db.query(
+            Listing.condition.label("condition"),
+            func.count(Listing.id).label("listing_count"),
+            func.avg(Listing.current_price).label("avg_price"),
+            func.min(Listing.current_price).label("min_price"),
+        )
+        .filter(_public_listing_condition(Listing.brand == brand, Listing.model == model))
+        .group_by(Listing.condition)
+        .all()
+    )
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No active listings found for this market")
+
+    # Compute overall average across all conditions
+    total_listings = sum(row.listing_count for row in rows)
+    overall_avg_price = sum(float(row.avg_price) * row.listing_count for row in rows) / total_listings
+
+    # Fetch all prices per condition for median calculation
+    all_listings = (
+        db.query(Listing.condition, Listing.current_price)
+        .filter(_public_listing_condition(Listing.brand == brand, Listing.model == model))
+        .order_by(Listing.condition, Listing.current_price)
+        .all()
+    )
+
+    # Group prices by condition for median
+    from collections import defaultdict
+    prices_by_condition: dict[str, list[float]] = defaultdict(list)
+    for listing in all_listings:
+        prices_by_condition[listing.condition].append(float(listing.current_price))
+
+    def _median(prices: list[float]) -> float:
+        n = len(prices)
+        if n == 0:
+            return 0.0
+        sorted_prices = sorted(prices)
+        mid = n // 2
+        if n % 2 == 0:
+            return (sorted_prices[mid - 1] + sorted_prices[mid]) / 2
+        return sorted_prices[mid]
+
+    conditions = []
+    for row in rows:
+        condition = row.condition
+        avg_price = float(row.avg_price)
+        min_price = float(row.min_price)
+        median_price = _median(prices_by_condition[condition])
+
+        # Condition adjustment: how much this condition deviates from overall average
+        condition_adjustment_pct = ((avg_price - overall_avg_price) / overall_avg_price) * 100 if overall_avg_price > 0 else 0.0
+
+        # Fair value estimate is the average price for this condition
+        fair_value_estimate = avg_price
+
+        conditions.append(ConditionFairValueResponse(
+            condition=condition,
+            listing_count=row.listing_count,
+            avg_price=_round_float(avg_price, 0),
+            min_price=_round_float(min_price, 0),
+            median_price=_round_float(median_price, 0),
+            fair_value_estimate=_round_float(fair_value_estimate, 0),
+            condition_adjustment_pct=_round_float(condition_adjustment_pct),
+        ))
+
+    # Sort by adjustment descending (best condition first)
+    conditions.sort(key=lambda c: c.condition_adjustment_pct, reverse=True)
+
+    result = MarketFairValueResponse(
+        brand=brand,
+        model=model,
+        canonical_path=market_path(brand, model),
+        overall_avg_price=_round_float(overall_avg_price, 0),
+        total_listings=total_listings,
+        conditions=conditions,
+    )
+    await cache_set(cache_key, result.model_dump(), ttl=600)
     return result
 
 

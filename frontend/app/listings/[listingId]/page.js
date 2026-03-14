@@ -8,7 +8,7 @@ import StructuredData from '@/components/StructuredData'
 import ShareButton from '@/components/ShareButton'
 import WatchMarketCard from '@/components/WatchMarketCard'
 import { buildOutboundUrl, fetchApi } from '@/lib/api'
-import { buildMarketPath } from '@/lib/slug'
+import { buildMarketPath, slugifyValue } from '@/lib/slug'
 import { formatCurrency, formatPercent, freshnessLabel, platformLabel, titleCase } from '@/lib/format'
 import { absoluteUrl } from '@/lib/site'
 
@@ -25,6 +25,16 @@ async function getHistory(listingId) {
     return await fetchApi(`/api/listings/${listingId}/price-history`)
   } catch {
     return []
+  }
+}
+
+async function getFairValue(listing) {
+  try {
+    const brandSlug = slugifyValue(listing.brand)
+    const modelSlug = slugifyValue(listing.model)
+    return await fetchApi(`/api/markets/${brandSlug}/${modelSlug}/fair-value`)
+  } catch {
+    return null
   }
 }
 
@@ -95,11 +105,29 @@ export default async function ListingDetailPage({ params }) {
     notFound()
   }
 
-  const [history, marketData] = await Promise.all([
+  const [history, marketData, fairValueData] = await Promise.all([
     getHistory(listing.id),
     getMarketData(listing),
+    getFairValue(listing),
   ])
   const { stats: marketStats, platformBreakdown, relatedListings } = marketData
+
+  // Find fair value for this listing's condition
+  const conditionFairValue = fairValueData?.conditions?.find(
+    (c) => c.condition.toLowerCase() === (listing.condition || '').toLowerCase()
+  )
+  let fairValueDiffPct = null
+  let fairValueLabel = null
+  if (conditionFairValue && conditionFairValue.fair_value_estimate > 0) {
+    fairValueDiffPct = ((listing.current_price - conditionFairValue.fair_value_estimate) / conditionFairValue.fair_value_estimate) * 100
+    if (fairValueDiffPct <= -5) {
+      fairValueLabel = 'below'
+    } else if (fairValueDiffPct >= 5) {
+      fairValueLabel = 'above'
+    } else {
+      fairValueLabel = 'near'
+    }
+  }
 
   const marketPath = buildMarketPath(listing.brand, listing.model)
   const platformName = platformLabel(listing.platform)
@@ -214,6 +242,37 @@ export default async function ListingDetailPage({ params }) {
                 <p className="text-stone-500">Color</p>
                 <p className="mt-2 text-xl font-semibold text-stone-900">{listing.color || 'Not listed'}</p>
               </div>
+              {conditionFairValue && (
+                <div className={`rounded-2xl border p-4 sm:col-span-2 ${
+                  fairValueLabel === 'below'
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : fairValueLabel === 'above'
+                      ? 'border-pink-200 bg-pink-50'
+                      : 'border-amber-200 bg-amber-50'
+                }`}>
+                  <p className="text-stone-500">Fair value for {listing.condition}</p>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-3">
+                    <p className="text-xl font-semibold text-stone-900">
+                      {formatCurrency(conditionFairValue.fair_value_estimate)}
+                    </p>
+                    {fairValueDiffPct !== null && (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        fairValueLabel === 'below'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : fairValueLabel === 'above'
+                            ? 'bg-pink-100 text-pink-700'
+                            : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {fairValueLabel === 'below'
+                          ? `${formatPercent(Math.abs(fairValueDiffPct))} below — good deal`
+                          : fairValueLabel === 'above'
+                            ? `${formatPercent(Math.abs(fairValueDiffPct))} above fair value`
+                            : 'Near fair value'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
               {history.length > 1 && (() => {
                 const dropEvents = history.filter(h => h.drop_pct).length
                 return (

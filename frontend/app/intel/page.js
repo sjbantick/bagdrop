@@ -103,8 +103,8 @@ export default async function IntelligenceBriefPage() {
           </Link>
           <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-5">
             <p className="text-[11px] uppercase tracking-[0.25em] text-stone-400">Coming soon</p>
-            <p className="mt-2 text-lg font-semibold text-stone-400">Cross-platform arbitrage</p>
-            <p className="mt-1 text-sm text-stone-400">Same bag, different price — find the gap.</p>
+            <p className="mt-2 text-lg font-semibold text-stone-400">Condition price guide</p>
+            <p className="mt-1 text-sm text-stone-400">Fair value estimates by condition grade — is that &ldquo;Good&rdquo; bag really a deal?</p>
           </div>
         </div>
 
