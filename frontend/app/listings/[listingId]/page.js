@@ -6,6 +6,7 @@ import PriceHistoryChart from '@/components/PriceHistoryChart'
 import ReportListingCard from '@/components/ReportListingCard'
 import StructuredData from '@/components/StructuredData'
 import ShareButton from '@/components/ShareButton'
+import WatchMarketCard from '@/components/WatchMarketCard'
 import { buildOutboundUrl, fetchApi } from '@/lib/api'
 import { buildMarketPath } from '@/lib/slug'
 import { formatCurrency, formatPercent, freshnessLabel, platformLabel, titleCase } from '@/lib/format'
@@ -306,7 +307,16 @@ export default async function ListingDetailPage({ params }) {
           </section>
         </div>
 
+        {/* Watchlist CTA — placed prominently after market context */}
         <div className="mt-8">
+          <WatchMarketCard
+            brand={listing.brand}
+            model={listing.model}
+            listingCount={marketStats?.listing_count ?? null}
+          />
+        </div>
+
+        <div className="mt-6">
           <ReportListingCard listingId={listing.id} />
         </div>
 
