@@ -5,6 +5,7 @@ import ListingCard from '@/components/ListingCard'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import ReportListingCard from '@/components/ReportListingCard'
 import StructuredData from '@/components/StructuredData'
+import ShareButton from '@/components/ShareButton'
 import { buildOutboundUrl, fetchApi } from '@/lib/api'
 import { buildMarketPath } from '@/lib/slug'
 import { formatCurrency, formatPercent, freshnessLabel, platformLabel, titleCase } from '@/lib/format'
@@ -236,6 +237,10 @@ export default async function ListingDetailPage({ params }) {
               >
                 See this market
               </Link>
+              <ShareButton
+                title={`${listing.brand} ${displayModel} — ${formatCurrency(listing.current_price)}${listing.drop_pct ? ` (−${formatPercent(listing.drop_pct)} off)` : ''}`}
+                text={`Found this on BagDrop: ${listing.brand} ${displayModel} at ${formatCurrency(listing.current_price)} on ${platformName}.`}
+              />
             </div>
           </section>
         </div>
