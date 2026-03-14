@@ -214,6 +214,22 @@ export default async function ListingDetailPage({ params }) {
                 <p className="text-stone-500">Color</p>
                 <p className="mt-2 text-xl font-semibold text-stone-900">{listing.color || 'Not listed'}</p>
               </div>
+              {history.length > 1 && (() => {
+                const dropEvents = history.filter(h => h.drop_pct).length
+                return (
+                  <div className="rounded-2xl border border-pink-200 bg-pink-50 p-4 sm:col-span-2">
+                    <p className="text-stone-500">Price history</p>
+                    <p className="mt-2 text-xl font-semibold text-stone-900">
+                      Tracked {history.length}×
+                      {dropEvents > 0 && (
+                        <span className="ml-2 text-base font-medium text-pink-600">
+                          — {dropEvents} price {dropEvents === 1 ? 'drop' : 'drops'} recorded
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )
+              })()}
             </div>
 
             {listing.description && (

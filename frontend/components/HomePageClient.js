@@ -190,7 +190,7 @@ export default function HomePageClient({
               <div className="rounded-2xl border border-stone-200 bg-white/80 p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">Coverage</p>
                 <p className="mt-2 text-sm leading-6 text-stone-700">
-                  Live launch sources now include Fashionphile, Rebag, Yoogi, Cosette, and The Purse Affair.
+                  Tracks The RealReal, Vestiaire, Fashionphile, Rebag, and five more resale platforms in one feed.
                 </p>
               </div>
             </div>

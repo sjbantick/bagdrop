@@ -463,3 +463,54 @@ async def get_new_drops(
         .limit(limit)
         .all()
     )
+
+
+@router.get("/api/stats")
+async def get_stats(db: Session = Depends(get_db)):
+    """Homepage live stats: active listings, drops today, avg/biggest drop."""
+    cache_key = "bagdrop:v1:stats"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    now = datetime.utcnow()
+    today_cutoff = now - timedelta(hours=24)
+
+    total_active = (
+        db.query(func.count(Listing.id))
+        .filter(_public_listing_condition())
+        .scalar()
+        or 0
+    )
+
+    # Listings that got a confirmed price drop in the last 24h
+    drops_today = (
+        db.query(func.count(func.distinct(PriceHistory.listing_id)))
+        .filter(
+            PriceHistory.detected_at >= today_cutoff,
+            PriceHistory.drop_pct.isnot(None),
+        )
+        .scalar()
+        or 0
+    )
+
+    avg_drop_row = (
+        db.query(func.round(func.avg(Listing.drop_pct), 1))
+        .filter(_public_listing_condition(Listing.drop_pct.isnot(None)))
+        .scalar()
+    )
+
+    biggest_drop_row = (
+        db.query(func.round(func.max(Listing.drop_pct), 1))
+        .filter(_public_listing_condition(Listing.drop_pct.isnot(None)))
+        .scalar()
+    )
+
+    result = {
+        "total_active_listings": total_active,
+        "drops_today": int(drops_today),
+        "avg_drop_pct": float(avg_drop_row) if avg_drop_row is not None else None,
+        "biggest_drop_pct": float(biggest_drop_row) if biggest_drop_row is not None else None,
+    }
+    await cache_set(cache_key, result, ttl=120)  # 2-min cache
+    return result

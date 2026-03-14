@@ -131,51 +131,123 @@ def get_pending_watch_alerts(
     return pending
 
 
+def _listing_email_url(listing: Listing, surface: str = "watch_alert", context: str = "email") -> str:
+    """Build a BagDrop outbound tracking URL for use inside emails.
+
+    Routes clicks through /api/listings/{id}/outbound so affiliate UTMs and
+    click-tracking fire before the redirect hits the marketplace.
+    """
+    base = settings.public_api_url.rstrip("/")
+    return f"{base}/api/listings/{listing.id}/outbound?surface={surface}&context={context}"
+
+
+def _platform_display_name(platform: str) -> str:
+    return {
+        "realreal": "The RealReal",
+        "vestiaire": "Vestiaire",
+        "fashionphile": "Fashionphile",
+        "rebag": "Rebag",
+    }.get(platform.lower(), platform.title())
+
+
 def render_watch_alert_email(subscription: WatchSubscription, listings: list[Listing]) -> tuple[str, str, str]:
     market_label = f"{subscription.brand} {subscription.model}"
-    subject = f"BagDrop alert: {len(listings)} new {market_label} listings"
+    count = len(listings)
+    noun = "listing" if count == 1 else "listings"
+    subject = f"BagDrop: {count} new {market_label} {noun} just dropped"
     market_url = f"{settings.public_app_url.rstrip('/')}{market_path(subscription.brand, subscription.model)}"
     unsubscribe_url = build_watch_unsubscribe_url(subscription)
 
+    # ---- Plain-text body --------------------------------------------------
     text_lines = [
-        f"BagDrop found {len(listings)} new listings for {market_label}.",
+        f"BagDrop found {count} new {noun} for {market_label}.",
         "",
         f"Open market page: {market_url}",
         "",
     ]
-
     for listing in listings:
-        line = (
-            f"- {listing.platform}: ${listing.current_price:,.0f}"
-            f" | drop {listing.drop_pct or 0:.1f}%"
-            f" | {listing.url}"
+        tracked_url = _listing_email_url(listing)
+        drop_str = f" | -{listing.drop_pct:.1f}% off" if listing.drop_pct else ""
+        text_lines.append(
+            f"- {_platform_display_name(listing.platform)}: ${listing.current_price:,.0f}{drop_str}"
+            f" | {tracked_url}"
         )
-        text_lines.append(line)
-
     text_lines.extend(["", f"Unsubscribe: {unsubscribe_url}"])
 
-    html_items = "".join(
-        [
-            (
-                "<li style=\"margin-bottom:14px;\">"
-                f"<strong>{listing.platform}</strong> &middot; ${listing.current_price:,.0f}"
-                f" &middot; drop {listing.drop_pct or 0:.1f}%"
-                f"<br/><a href=\"{listing.url}\">Open marketplace listing</a>"
-                "</li>"
-            )
-            for listing in listings
-        ]
-    )
+    # ---- HTML body --------------------------------------------------------
+    listing_rows = []
+    for listing in listings:
+        tracked_url = _listing_email_url(listing)
+        platform_name = _platform_display_name(listing.platform)
+        drop_badge = (
+            f"<span style=\"display:inline-block;background:#ec4899;color:#fff;"
+            f"border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;"
+            f"letter-spacing:0.05em;margin-left:8px;\">-{listing.drop_pct:.1f}%</span>"
+        ) if listing.drop_pct else ""
+        condition_str = listing.condition.title() if listing.condition else ""
+        listing_rows.append(
+            f"<tr>"
+            f"<td style=\"padding:14px 16px;border-bottom:1px solid #1f1f1f;\">"
+            f"<div style=\"font-size:11px;text-transform:uppercase;letter-spacing:0.18em;"
+            f"color:#9ca3af;margin-bottom:4px;\">{platform_name}</div>"
+            f"<div style=\"font-size:22px;font-weight:700;color:#ffffff;\">"
+            f"${listing.current_price:,.0f}{drop_badge}</div>"
+            f"<div style=\"font-size:12px;color:#9ca3af;margin-top:4px;\">{condition_str}</div>"
+            f"</td>"
+            f"<td style=\"padding:14px 16px;border-bottom:1px solid #1f1f1f;"
+            f"text-align:right;vertical-align:middle;\">"
+            f"<a href=\"{tracked_url}\" style=\"display:inline-block;background:#ec4899;"
+            f"color:#ffffff;text-decoration:none;border-radius:999px;padding:9px 20px;"
+            f"font-size:13px;font-weight:600;\">View listing &rarr;</a>"
+            f"</td>"
+            f"</tr>"
+        )
 
-    html = (
-        "<div style=\"background:#050505;color:#ffffff;padding:24px;font-family:Arial,sans-serif;\">"
-        f"<h1 style=\"font-size:28px;margin:0 0 12px;\">BagDrop alert: {market_label}</h1>"
-        f"<p style=\"color:#d1d5db;line-height:1.6;\">We found {len(listings)} new listings for this market.</p>"
-        f"<p><a href=\"{market_url}\" style=\"color:#f87171;\">Open the BagDrop market page</a></p>"
-        f"<ul style=\"padding-left:18px;line-height:1.7;\">{html_items}</ul>"
-        f"<p style=\"margin-top:24px;color:#9ca3af;\">Unsubscribe: <a href=\"{unsubscribe_url}\" style=\"color:#9ca3af;\">stop these alerts</a></p>"
-        "</div>"
-    )
+    rows_html = "\n".join(listing_rows)
+    count_label = f"{count} new {noun}"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;min-height:100vh;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr>
+          <td style="padding-bottom:24px;">
+            <a href="{settings.public_app_url}" style="text-decoration:none;">
+              <span style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#ffffff;">Bag</span><span style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#ec4899;">Drop</span>
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#111111;border:1px solid #1f1f1f;border-radius:16px;padding:24px 24px 8px;">
+            <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.25em;color:#ec4899;">Watch Alert</p>
+            <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;line-height:1.2;">{market_label}</h1>
+            <p style="margin:0 0 20px;font-size:15px;color:#9ca3af;line-height:1.6;">{count_label} just hit BagDrop.</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              {rows_html}
+            </table>
+            <div style="padding:20px 0 8px;text-align:center;">
+              <a href="{market_url}" style="display:inline-block;border:1px solid #374151;color:#d1d5db;text-decoration:none;border-radius:999px;padding:10px 24px;font-size:13px;">
+                Open full market page
+              </a>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 0 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#4b5563;line-height:1.7;">
+              You&rsquo;re watching {market_label} on BagDrop.<br>
+              <a href="{unsubscribe_url}" style="color:#6b7280;text-decoration:underline;">Unsubscribe from this market</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
     return subject, "\n".join(text_lines), html
 
