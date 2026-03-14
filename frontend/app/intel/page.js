@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import Header from '@/components/Header'
 import ArbitrageRadar from '@/components/ArbitrageRadar'
 import BagIndexBoard from '@/components/BagIndexBoard'
@@ -83,7 +84,32 @@ export default async function IntelligenceBriefPage() {
           )}
         </section>
 
-        <div className="mt-8">
+        {/* Quick links to intel sub-pages */}
+        <div className="mt-8 mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Link
+            href="/intel/weekly-drops"
+            className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_16px_rgba(194,168,140,0.06)] transition-all hover:border-pink-300 hover:shadow-[0_6px_24px_rgba(236,72,153,0.08)]"
+          >
+            <p className="text-[11px] uppercase tracking-[0.25em] text-pink-500">Report</p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">Weekly drops</p>
+            <p className="mt-1 text-sm text-stone-500">Week-by-week summary of price drops across all brands.</p>
+          </Link>
+          <Link
+            href="/intel/retail-prices"
+            className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_16px_rgba(194,168,140,0.06)] transition-all hover:border-pink-300 hover:shadow-[0_6px_24px_rgba(236,72,153,0.08)]"
+          >
+            <p className="text-[11px] uppercase tracking-[0.25em] text-pink-500">Tracker</p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">Retail price increases</p>
+            <p className="mt-1 text-sm text-stone-500">Every Chanel, Hermès, and LV retail price hike since 2019.</p>
+          </Link>
+          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-5">
+            <p className="text-[11px] uppercase tracking-[0.25em] text-stone-400">Coming soon</p>
+            <p className="mt-2 text-lg font-semibold text-stone-400">Cross-platform arbitrage</p>
+            <p className="mt-1 text-sm text-stone-400">Same bag, different price — find the gap.</p>
+          </div>
+        </div>
+
+        <div>
           <ArbitrageRadar opportunities={brief.arbitrage} />
           <NewDropsRadar opportunities={brief.new_drops} />
           <BagIndexBoard snapshots={brief.bag_index_movers} />

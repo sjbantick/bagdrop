@@ -101,6 +101,7 @@ export default async function sitemap() {
     { url: `${SITE_URL}/markets`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/intel`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/intel/weekly-drops`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/intel/retail-prices`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
     ...weeklyDropEntries,
     ...brandEntries,
     ...marketEntries.values(),
