@@ -14,6 +14,9 @@ export const metadata = {
   description: 'Real-time luxury handbag price drop tracker across Fashionphile, Rebag, The RealReal, and Vestiaire.',
   alternates: {
     canonical: '/',
+    types: {
+      'application/rss+xml': '/feed.xml',
+    },
   },
   openGraph: {
     title: 'BagDrop | Luxury Handbag Price Drops',
