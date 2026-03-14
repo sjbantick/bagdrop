@@ -6,13 +6,18 @@ import { buildMarketPath } from '@/lib/slug'
 import { formatCurrency, formatPercent, freshnessLabel, platformLabel, titleCase } from '@/lib/format'
 
 export default function ListingCard({ listing }) {
-  const dropPct = listing.drop_pct ? formatPercent(listing.drop_pct) : '0.0%'
+  const dropPct = listing.drop_pct ? formatPercent(listing.drop_pct) : null
   const dropAmount = listing.drop_amount || 0
   const originalPrice = listing.original_price || listing.current_price
   const marketPath = buildMarketPath(listing.brand, listing.model)
   const detailPath = `/listings/${listing.id}`
   const platformName = platformLabel(listing.platform)
   const outboundUrl = buildOutboundUrl(listing.id, 'listing_card', 'feed')
+
+  // "NEW" badge: first seen within last 72 hours
+  const isNew = listing.first_seen
+    ? (Date.now() - new Date(listing.first_seen).getTime()) < 72 * 60 * 60 * 1000
+    : false
 
   return (
     <div className="group overflow-hidden rounded-[1.25rem] border border-stone-200 bg-[#f6efe4] shadow-[0_10px_30px_rgba(194,168,140,0.12)] transition-colors hover:border-pink-300">
@@ -31,9 +36,19 @@ export default function ListingCard({ listing }) {
             </div>
           )}
 
-          <div className="absolute top-2 right-2 rounded-full bg-pink-500 px-3 py-1 text-sm font-bold text-white">
-            -{dropPct}
-          </div>
+          {/* Drop % badge — only when there's a real markdown */}
+          {dropPct && (
+            <div className="absolute top-2 right-2 rounded-full bg-pink-500 px-3 py-1 text-sm font-bold text-white">
+              -{dropPct}
+            </div>
+          )}
+
+          {/* NEW badge — listings first seen within 72h */}
+          {isNew && (
+            <div className={`absolute ${dropPct ? 'top-10 right-2' : 'top-2 right-2'} rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white`}>
+              New
+            </div>
+          )}
 
           <div className="absolute top-2 left-2 rounded-full bg-white/90 px-2 py-1 text-xs font-mono text-stone-700">
             {platformName}
@@ -52,12 +67,14 @@ export default function ListingCard({ listing }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
               <div>
                 <p className="text-2xl font-bold text-stone-900">{formatCurrency(listing.current_price)}</p>
-                {originalPrice !== listing.current_price && (
+                {dropAmount > 0 && originalPrice !== listing.current_price && (
                   <p className="text-xs text-stone-400 line-through">{formatCurrency(originalPrice)}</p>
                 )}
               </div>
               <div className="text-right">
-                <p className="text-sm font-bold text-pink-600">-{formatCurrency(dropAmount)}</p>
+                {dropAmount > 0 && (
+                  <p className="text-sm font-bold text-pink-600">-{formatCurrency(dropAmount)}</p>
+                )}
                 <p className="text-xs text-stone-500">
                   {freshnessLabel(listing.last_seen)}
                 </p>
