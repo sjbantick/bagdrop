@@ -75,9 +75,25 @@ export default function Filters({ filters, setFilters }) {
     }
   }, [matchedBrand])
 
+  const DROP_THRESHOLDS = [
+    { label: 'Any drop', value: 0 },
+    { label: '10%+', value: 10 },
+    { label: '20%+', value: 20 },
+    { label: '30%+', value: 30 },
+    { label: '50%+', value: 50 },
+  ]
+
+  const hasActiveFilters = Boolean(
+    filters.brand || filters.model || filters.platform || filters.minDropPct || filters.sortBy !== 'drop_pct'
+  )
+
+  const clearFilters = () =>
+    setFilters({ brand: '', model: '', sortBy: 'drop_pct', minDropPct: 0, platform: '' })
+
   return (
-    <div className="mb-6">
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+    <div className="mb-6 space-y-3">
+      {/* Platform pills */}
+      <div className="flex flex-wrap gap-2">
         {PLATFORMS.map((platform) => (
           <button
             key={platform.value}
@@ -93,7 +109,26 @@ export default function Filters({ filters, setFilters }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+      {/* Drop % quick-select */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-[11px] font-mono text-stone-400 uppercase tracking-[0.15em]">Min drop</span>
+        {DROP_THRESHOLDS.map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setFilters({ ...filters, minDropPct: t.value })}
+            className={`px-3 py-1 rounded-full text-xs font-mono whitespace-nowrap transition-colors ${
+              filters.minDropPct === t.value
+                ? 'bg-stone-900 text-white'
+                : 'border border-stone-300 bg-white text-stone-600 hover:border-stone-400'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Brand / model / sort row */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <input
             type="text"
@@ -101,7 +136,7 @@ export default function Filters({ filters, setFilters }) {
             value={filters.brand}
             onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
             list="brand-suggestions"
-            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
+            className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
           />
           <datalist id="brand-suggestions">
             {brands.map((brand) => (
@@ -117,7 +152,7 @@ export default function Filters({ filters, setFilters }) {
             value={filters.model}
             onChange={(e) => setFilters({ ...filters, model: e.target.value })}
             list="model-suggestions"
-            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
+            className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
           />
           <datalist id="model-suggestions">
             {models.map((model) => (
@@ -126,35 +161,33 @@ export default function Filters({ filters, setFilters }) {
           </datalist>
         </div>
 
-        <select
-          value={filters.sortBy}
-          onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-          className="rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-pink-400 focus:outline-none"
-        >
-          <option value="drop_pct">Biggest % Drop</option>
-          <option value="drop_amount">Biggest $ Drop</option>
-          <option value="current_price">Price: High → Low</option>
-          <option value="last_seen">Most Recent</option>
-        </select>
-
-        <div className="relative">
-          <input
-            type="number"
-            placeholder="Min drop %"
-            value={filters.minDropPct || ''}
-            onChange={(e) => setFilters({ ...filters, minDropPct: parseFloat(e.target.value) || 0 })}
-            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-pink-400 focus:outline-none"
-            min="0"
-            max="100"
-          />
+        <div className="flex gap-2">
+          <select
+            value={filters.sortBy}
+            onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+            className="flex-1 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-pink-400 focus:outline-none"
+          >
+            <option value="drop_pct">Biggest % Drop</option>
+            <option value="drop_amount">Biggest $ Drop</option>
+            <option value="current_price">Price: High → Low</option>
+            <option value="last_seen">Most Recent</option>
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-500 hover:border-pink-300 hover:text-pink-600 transition-colors whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="mt-2 text-[11px] font-mono text-stone-500">
-        {matchedBrand
-          ? `Model suggestions loaded for ${matchedBrand}`
-          : 'Select an exact brand to unlock model suggestions'}
-      </div>
+      {matchedBrand && (
+        <p className="text-[11px] font-mono text-stone-400">
+          Showing model suggestions for {matchedBrand}
+        </p>
+      )}
     </div>
   )
 }
