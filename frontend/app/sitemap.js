@@ -1,5 +1,5 @@
 import { fetchApi } from '@/lib/api'
-import { buildMarketPath } from '@/lib/slug'
+import { buildMarketPath, slugifyValue } from '@/lib/slug'
 import { SITE_URL } from '@/lib/site'
 
 const LISTING_PAGE_SIZE = 500
@@ -86,12 +86,23 @@ export default async function sitemap() {
     priority: 0.6,
   }))
 
+  // Dedupe brand pages from the markets list
+  const brandSet = new Set()
+  for (const m of featuredMarkets) brandSet.add(m.brand)
+  const brandEntries = [...brandSet].map((brand) => ({
+    url: `${SITE_URL}/${slugifyValue(brand)}`,
+    lastModified: new Date(),
+    changeFrequency: 'daily',
+    priority: 0.8,
+  }))
+
   return [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: 'hourly', priority: 1 },
     { url: `${SITE_URL}/markets`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/intel`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/intel/weekly-drops`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.7 },
     ...weeklyDropEntries,
+    ...brandEntries,
     ...marketEntries.values(),
     ...listingEntries,
   ]

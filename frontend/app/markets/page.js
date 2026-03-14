@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatPercent, titleCase } from '@/lib/format'
+import { slugifyValue } from '@/lib/slug'
 
 export const metadata = {
   title: 'All Markets | BagDrop',
@@ -48,7 +49,9 @@ export default async function MarketsIndexPage() {
             {brands.map((brand) => (
               <section key={brand}>
                 <h2 className="mb-4 text-[11px] uppercase tracking-[0.3em] text-stone-500 border-b border-stone-200 pb-2">
-                  {brand}
+                  <Link href={`/${slugifyValue(brand)}`} className="hover:text-stone-900 transition-colors">
+                    {brand}
+                  </Link>
                 </h2>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {byBrand[brand].map((market) => {
