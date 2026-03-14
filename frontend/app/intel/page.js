@@ -74,8 +74,7 @@ export default async function IntelligenceBriefPage() {
           <p className="text-[11px] uppercase tracking-[0.3em] text-red-500 mb-3">BagDrop Intelligence</p>
           <h1 className="text-3xl font-semibold text-stone-950 sm:text-4xl md:text-5xl">Daily market brief</h1>
           <p className="mt-4 max-w-3xl text-base md:text-lg leading-8 text-stone-600">
-            A shareable owned surface for the best BagDrop signals: mispriced listings, meaningful new drops, and brand-level
-            resale pressure.
+            Cross-platform arbitrage opportunities, high-signal new drops, and brand-level resale pressure — updated daily.
           </p>
           {brief.generated_at && (
             <p className="mt-4 text-xs font-mono text-stone-500">

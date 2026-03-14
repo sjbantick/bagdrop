@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { formatCurrency } from '@/lib/format'
+import { absoluteUrl } from '@/lib/site'
 import { RETAIL_PRICE_HISTORY, computeRetailStats } from '@/lib/retail-prices'
 
 export const metadata = {
@@ -8,6 +9,19 @@ export const metadata = {
   description:
     'Track every Chanel, Hermès, and Louis Vuitton retail price increase since 2019. See how much luxury handbag prices have risen at retail vs resale.',
   alternates: { canonical: '/intel/retail-prices' },
+  openGraph: {
+    title: 'Retail Price Increase Tracker | BagDrop',
+    description: 'Every Chanel, Hermès, and LV retail price increase since 2019 — tracked by BagDrop.',
+    url: '/intel/retail-prices',
+    type: 'article',
+    images: [{ url: absoluteUrl('/intel/retail-prices/opengraph-image'), width: 1200, height: 630, alt: 'BagDrop retail price tracker' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Retail Price Increase Tracker | BagDrop',
+    description: 'Every Chanel, Hermès, and LV retail price increase since 2019.',
+    images: [absoluteUrl('/intel/retail-prices/opengraph-image')],
+  },
 }
 
 function PriceTimeline({ history }) {

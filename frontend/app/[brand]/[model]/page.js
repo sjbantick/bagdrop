@@ -124,11 +124,13 @@ export default async function MarketPage({ params, searchParams }) {
         )}
 
         <div className="flex flex-wrap items-center gap-2 text-sm text-stone-500">
-          <Link href="/" className="transition-colors hover:text-stone-900">
-            Feed
+          <Link href="/markets" className="transition-colors hover:text-stone-900">
+            Markets
           </Link>
           <span>/</span>
-          <span className="text-stone-700">{market.brand}</span>
+          <Link href={`/${params.brand}`} className="transition-colors hover:text-stone-900">
+            {market.brand}
+          </Link>
           <span>/</span>
           <span className="text-stone-700">{displayModel}</span>
         </div>
