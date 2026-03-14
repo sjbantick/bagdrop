@@ -3,6 +3,10 @@ import { SITE_URL } from '@/lib/site'
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
+  // Set NEXT_PUBLIC_GSC_VERIFICATION in Railway to activate Google Search Console verification
+  ...(process.env.NEXT_PUBLIC_GSC_VERIFICATION && {
+    verification: { google: process.env.NEXT_PUBLIC_GSC_VERIFICATION },
+  }),
   title: {
     default: 'BagDrop | Luxury Handbag Price Drops',
     template: '%s | BagDrop',
