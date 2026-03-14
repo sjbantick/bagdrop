@@ -21,6 +21,9 @@ export default function Header({ stats }) {
             <Link href="/" className="text-stone-500 transition-colors hover:text-stone-900">
               feed
             </Link>
+            <Link href="/markets" className="text-stone-500 transition-colors hover:text-stone-900">
+              markets
+            </Link>
             <Link href="/intel" className="text-stone-500 transition-colors hover:text-stone-900">
               intel
             </Link>
