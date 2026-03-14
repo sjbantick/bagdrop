@@ -26,14 +26,18 @@ async function getHistory(listingId) {
   }
 }
 
-async function getRelatedListings(listing) {
+async function getMarketData(listing) {
   try {
     const market = await fetchApi(
-      `/api/markets/${buildMarketPath(listing.brand, listing.model).slice(1)}?limit=4`
+      `/api/markets/${buildMarketPath(listing.brand, listing.model).slice(1)}?limit=8`
     )
-    return market.listings.filter((item) => item.id !== listing.id).slice(0, 3)
+    return {
+      stats: market.stats || null,
+      platformBreakdown: market.platform_breakdown || [],
+      relatedListings: (market.listings || []).filter((item) => item.id !== listing.id).slice(0, 3),
+    }
   } catch {
-    return []
+    return { stats: null, platformBreakdown: [], relatedListings: [] }
   }
 }
 
@@ -89,10 +93,11 @@ export default async function ListingDetailPage({ params }) {
     notFound()
   }
 
-  const [history, relatedListings] = await Promise.all([
+  const [history, marketData] = await Promise.all([
     getHistory(listing.id),
-    getRelatedListings(listing),
+    getMarketData(listing),
   ])
+  const { stats: marketStats, platformBreakdown, relatedListings } = marketData
 
   const marketPath = buildMarketPath(listing.brand, listing.model)
   const platformName = platformLabel(listing.platform)
@@ -239,18 +244,60 @@ export default async function ListingDetailPage({ params }) {
           <PriceHistoryChart history={history} />
 
           <section className="rounded-2xl border border-stone-200 bg-[#fffaf2] p-5">
-            <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Why It Matters</p>
-            <h2 className="text-xl font-semibold text-stone-900">BagDrop context</h2>
-            <div className="mt-5 space-y-4 text-sm leading-7 text-stone-600">
-              <p>
-                This page keeps the traffic and context inside BagDrop first. Users can inspect the markdown path,
-                compare the listing against similar inventory, and only then click out to the marketplace.
+            <p className="mb-2 text-[11px] uppercase tracking-[0.25em] text-pink-500">Market Context</p>
+            <h2 className="text-xl font-semibold text-stone-900">{listing.brand} {displayModel} market</h2>
+
+            {marketStats ? (
+              <div className="mt-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-stone-200 bg-white p-3">
+                    <p className="text-[11px] text-stone-500 uppercase tracking-[0.15em]">Listings</p>
+                    <p className="mt-1 text-lg font-semibold text-stone-900">{marketStats.listing_count}</p>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-3">
+                    <p className="text-[11px] text-stone-500 uppercase tracking-[0.15em]">Market avg</p>
+                    <p className="mt-1 text-lg font-semibold text-stone-900">{formatCurrency(marketStats.average_price)}</p>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-3">
+                    <p className="text-[11px] text-stone-500 uppercase tracking-[0.15em]">Lowest ask</p>
+                    <p className="mt-1 text-lg font-semibold text-stone-900">{formatCurrency(marketStats.lowest_price)}</p>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-3">
+                    <p className="text-[11px] text-stone-500 uppercase tracking-[0.15em]">Avg markdown</p>
+                    <p className="mt-1 text-lg font-semibold text-pink-600">-{marketStats.average_drop_pct}%</p>
+                  </div>
+                </div>
+
+                {marketStats.average_price && listing.current_price < marketStats.average_price && (
+                  <div className="rounded-xl border border-pink-200 bg-pink-50 p-3">
+                    <p className="text-sm text-pink-700 font-medium">
+                      This listing is{' '}
+                      <span className="font-bold">
+                        {formatPercent(((marketStats.average_price - listing.current_price) / marketStats.average_price) * 100)}
+                      </span>{' '}
+                      below the market average — {formatCurrency(marketStats.average_price - listing.current_price)} cheaper than typical.
+                    </p>
+                  </div>
+                )}
+
+                {platformBreakdown.length > 1 && (
+                  <div>
+                    <p className="text-[11px] text-stone-500 uppercase tracking-[0.15em] mb-2">Also available on</p>
+                    <div className="flex flex-wrap gap-2">
+                      {platformBreakdown.map(({ platform, listing_count: count }) => (
+                        <span key={platform} className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-mono text-stone-600">
+                          {platformLabel(platform)} ({count})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-stone-500">
+                Market data unavailable. <Link href={marketPath} className="underline hover:text-stone-900">View market page</Link>.
               </p>
-              <p>
-                For luxury resale, the market view is often more valuable than a single listing. The linked market
-                page shows whether this ask is actually attractive relative to the current supply.
-              </p>
-            </div>
+            )}
           </section>
         </div>
 
