@@ -30,7 +30,7 @@ export default function Image() {
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '28px',
             padding: '44px',
-            background: 'radial-gradient(circle at top right, rgba(239,68,68,0.16), transparent 28%)',
+            background: 'radial-gradient(circle at top right, rgba(236,72,153,0.16), transparent 28%)',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -42,7 +42,7 @@ export default function Image() {
                 fontSize: '24px',
                 letterSpacing: '0.32em',
                 textTransform: 'uppercase',
-                color: '#f87171',
+                color: '#ec4899',
               }}
             >
               <div
@@ -50,7 +50,7 @@ export default function Image() {
                   width: '14px',
                   height: '14px',
                   borderRadius: '9999px',
-                  background: '#ef4444',
+                  background: '#ec4899',
                 }}
               />
               BagDrop
@@ -60,17 +60,16 @@ export default function Image() {
                 Luxury handbag price drops.
               </div>
               <div style={{ fontSize: '30px', lineHeight: 1.35, color: '#d1d5db' }}>
-                Fashionphile, Rebag, The RealReal, and Vestiaire tracked in one place with owned market pages and
-                monitored outbound clicks.
+                Track resale prices across Fashionphile, Rebag, The RealReal, and Vestiaire — updated hourly.
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '18px' }}>
             {[
-              'Live resale inventory',
-              'Canonical market pages',
-              'Tracked outbound clicks',
+              'Price drop alerts',
+              'Cross-platform comparison',
+              'Buy / wait signals',
             ].map((label) => (
               <div
                 key={label}

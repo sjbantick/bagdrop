@@ -359,3 +359,36 @@ class MarketFairValueResponse(BaseModel):
     overall_avg_price: float
     total_listings: int
     conditions: List[ConditionFairValueResponse]
+
+
+# ---------------------------------------------------------------------------
+# Condition price guide
+# ---------------------------------------------------------------------------
+
+class ConditionPremiumResponse(BaseModel):
+    condition: str
+    avg_price: float
+    avg_adjustment_pct: float  # vs the mean of all conditions combined
+    listing_count: int
+
+
+class ConditionGuideMarketConditionResponse(BaseModel):
+    condition: str
+    avg_price: float
+    listing_count: int
+    adjustment_pct: float  # vs this market's own mean
+
+
+class ConditionGuideMarketResponse(BaseModel):
+    brand: str
+    model: str
+    canonical_path: str
+    conditions: List[ConditionGuideMarketConditionResponse]
+
+
+class ConditionGuideResponse(BaseModel):
+    generated_at: datetime
+    total_listings_analyzed: int
+    markets_analyzed: int
+    condition_premiums: List[ConditionPremiumResponse]
+    per_market: List[ConditionGuideMarketResponse]

@@ -14,6 +14,10 @@ from models import BagIndexSnapshot, Listing, PriceHistory
 from schemas import (
     ArbitrageOpportunityResponse,
     BagIndexResponse,
+    ConditionGuideResponse,
+    ConditionGuideMarketConditionResponse,
+    ConditionGuideMarketResponse,
+    ConditionPremiumResponse,
     IntelligenceBriefResponse,
     ListingResponse,
     NewDropOpportunityResponse,
@@ -466,4 +470,137 @@ async def get_weekly_drops(
     # Cache past weeks for 1 hour; current week only 5 min
     ttl = 3600 if sunday < date.today() else 300
     await cache_set(cache_key, result.model_dump(), ttl=ttl)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Condition price guide
+# ---------------------------------------------------------------------------
+
+@router.get("/api/intel/condition-guide", response_model=ConditionGuideResponse)
+async def get_condition_guide(db: Session = Depends(get_db)):
+    """Cross-market condition price guide: how much does condition grade affect resale value?"""
+    cache_key = "bagdrop:v1:condition-guide"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    # Top 8 markets by listing count (min 3 listings — matching featured markets logic)
+    listing_count_expr = func.count(Listing.id)
+    market_rows = (
+        db.query(
+            Listing.brand.label("brand"),
+            Listing.model.label("model"),
+            listing_count_expr.label("listing_count"),
+        )
+        .filter(_public_listing_condition())
+        .group_by(Listing.brand, Listing.model)
+        .having(listing_count_expr >= 3)
+        .order_by(desc(listing_count_expr))
+        .limit(8)
+        .all()
+    )
+
+    if not market_rows:
+        result = ConditionGuideResponse(
+            generated_at=datetime.utcnow(),
+            total_listings_analyzed=0,
+            markets_analyzed=0,
+            condition_premiums=[],
+            per_market=[],
+        )
+        await cache_set(cache_key, result.model_dump(), ttl=900)
+        return result
+
+    # Collect per-market condition stats
+    from collections import defaultdict
+    from utils import market_path
+
+    per_market: list[ConditionGuideMarketResponse] = []
+    total_listings_analyzed = 0
+
+    # For cross-market condition premium: accumulate (condition -> list of avg_prices)
+    condition_prices: dict[str, list[float]] = defaultdict(list)
+    condition_counts: dict[str, int] = defaultdict(int)
+
+    for market in market_rows:
+        brand, model = market.brand, market.model
+
+        cond_rows = (
+            db.query(
+                Listing.condition.label("condition"),
+                func.count(Listing.id).label("count"),
+                func.avg(Listing.current_price).label("avg_price"),
+                func.min(Listing.current_price).label("min_price"),
+            )
+            .filter(_public_listing_condition(Listing.brand == brand, Listing.model == model))
+            .group_by(Listing.condition)
+            .all()
+        )
+
+        if not cond_rows:
+            continue
+
+        # Market-level overall avg (weighted by listing count)
+        market_total = sum(r.count for r in cond_rows)
+        market_overall_avg = (
+            sum(float(r.avg_price) * r.count for r in cond_rows) / market_total
+            if market_total > 0 else 0.0
+        )
+
+        total_listings_analyzed += market_total
+
+        conditions_out: list[ConditionGuideMarketConditionResponse] = []
+        for r in cond_rows:
+            avg_p = float(r.avg_price)
+            adj_pct = (
+                ((avg_p - market_overall_avg) / market_overall_avg) * 100
+                if market_overall_avg > 0 else 0.0
+            )
+            conditions_out.append(ConditionGuideMarketConditionResponse(
+                condition=r.condition,
+                avg_price=_round_float(avg_p, 0),
+                listing_count=r.count,
+                adjustment_pct=_round_float(adj_pct),
+            ))
+            # Accumulate for cross-market premium
+            condition_prices[r.condition].append(avg_p)
+            condition_counts[r.condition] += r.count
+
+        # Sort: pristine → excellent → good → fair (descending adjustment)
+        conditions_out.sort(key=lambda c: c.adjustment_pct, reverse=True)
+
+        per_market.append(ConditionGuideMarketResponse(
+            brand=brand,
+            model=model,
+            canonical_path=market_path(brand, model),
+            conditions=conditions_out,
+        ))
+
+    # Cross-market condition premiums
+    # Compute the grand mean across all conditions as reference
+    all_avg_prices = [p for prices in condition_prices.values() for p in prices]
+    grand_mean = sum(all_avg_prices) / len(all_avg_prices) if all_avg_prices else 0.0
+
+    condition_premiums: list[ConditionPremiumResponse] = []
+    for condition, prices in condition_prices.items():
+        avg_p = sum(prices) / len(prices)
+        adj_pct = ((avg_p - grand_mean) / grand_mean) * 100 if grand_mean > 0 else 0.0
+        condition_premiums.append(ConditionPremiumResponse(
+            condition=condition,
+            avg_price=_round_float(avg_p, 0),
+            avg_adjustment_pct=_round_float(adj_pct),
+            listing_count=condition_counts[condition],
+        ))
+
+    condition_premiums.sort(key=lambda c: c.avg_adjustment_pct, reverse=True)
+
+    result = ConditionGuideResponse(
+        generated_at=datetime.utcnow(),
+        total_listings_analyzed=total_listings_analyzed,
+        markets_analyzed=len(per_market),
+        condition_premiums=condition_premiums,
+        per_market=per_market,
+    )
+    await cache_set(cache_key, result.model_dump(), ttl=900)
     return result

@@ -101,11 +101,14 @@ export default async function IntelligenceBriefPage() {
             <p className="mt-2 text-lg font-semibold text-stone-900">Retail price increases</p>
             <p className="mt-1 text-sm text-stone-500">Every Chanel, Hermès, and LV retail price hike since 2019.</p>
           </Link>
-          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-5">
-            <p className="text-[11px] uppercase tracking-[0.25em] text-stone-400">Coming soon</p>
-            <p className="mt-2 text-lg font-semibold text-stone-400">Condition price guide</p>
-            <p className="mt-1 text-sm text-stone-400">Fair value estimates by condition grade — is that &ldquo;Good&rdquo; bag really a deal?</p>
-          </div>
+          <Link
+            href="/intel/condition-guide"
+            className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_16px_rgba(194,168,140,0.06)] transition-all hover:border-pink-300 hover:shadow-[0_6px_24px_rgba(236,72,153,0.08)]"
+          >
+            <p className="text-[11px] uppercase tracking-[0.25em] text-pink-500">Guide</p>
+            <p className="mt-2 text-lg font-semibold text-stone-900">Condition price guide</p>
+            <p className="mt-1 text-sm text-stone-500">Fair value estimates by condition grade — is that &ldquo;Good&rdquo; bag really a deal?</p>
+          </Link>
         </div>
 
         <div>

@@ -52,6 +52,12 @@ export default function RootLayout({ children }) {
             src="https://plausible.io/js/script.outbound-links.js"
           />
         )}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#ec4899" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="BagDrop" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
       <body className="bg-[#fffdf8] text-stone-900 font-serif">
         {children}
