@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, desc, func, or_
 from sqlalchemy.orm import Session
 
+from cache import cache_get, cache_set
 from config import settings
 from database import get_db
 from deps import _extract_client_ip, _public_listing_condition, _public_listing_cutoff
@@ -409,6 +410,10 @@ async def report_listing_issue(
 @router.get("/api/brands")
 async def get_brands(db: Session = Depends(get_db)):
     """Get all unique brands."""
+    cache_key = "bagdrop:v1:brands"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
     brands = (
         db.query(Listing.brand)
         .filter(_public_listing_condition())
@@ -416,7 +421,9 @@ async def get_brands(db: Session = Depends(get_db)):
         .order_by(Listing.brand)
         .all()
     )
-    return [b[0] for b in brands]
+    result = [b[0] for b in brands]
+    await cache_set(cache_key, result, ttl=900)  # 15 min — brands change rarely
+    return result
 
 
 @router.get("/api/brands/{brand}/models")

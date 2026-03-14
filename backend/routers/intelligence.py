@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
+from cache import cache_delete, cache_get, cache_set
 from database import get_db
 from deps import _public_listing_condition, _public_listing_cutoff, _require_ops_access, _round_float
 from intelligence import compute_bag_index_rows, persist_bag_index_snapshots
@@ -195,24 +196,30 @@ def _build_intelligence_brief(
 @router.get("/api/stats")
 async def get_stats(db: Session = Depends(get_db)):
     """Get overall stats for the header display."""
+    cache_key = "bagdrop:v1:stats"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     avg_drop = db.query(func.avg(Listing.drop_pct)).filter(
         _public_listing_condition(Listing.drop_pct > 0)
     ).scalar()
     total_active = db.query(func.count(Listing.id)).filter(_public_listing_condition()).scalar() or 0
     biggest_drop = db.query(func.max(Listing.drop_pct)).filter(_public_listing_condition()).scalar()
-    # Drops today: listings whose price history has an entry in the last 24h
     drops_today = (
         db.query(func.count(func.distinct(PriceHistory.listing_id)))
         .filter(PriceHistory.detected_at >= datetime.utcnow() - timedelta(hours=24))
         .scalar()
         or 0
     )
-    return {
+    result = {
         "total_active_listings": total_active,
         "avg_drop_pct": round(float(avg_drop), 1) if avg_drop else None,
         "biggest_drop_pct": round(float(biggest_drop), 1) if biggest_drop else None,
         "drops_today": drops_today,
     }
+    await cache_set(cache_key, result, ttl=120)
+    return result
 
 
 @router.get("/api/bag-index", response_model=List[BagIndexResponse])
@@ -225,8 +232,14 @@ async def get_bag_index(
 ):
     """Get latest BagIndex for top brands."""
     if live:
+        cache_key = f"bagdrop:v1:bag-index:{limit}:{min_active_listings}"
+        cached = await cache_get(cache_key)
+        if cached:
+            return cached
         rows = compute_bag_index_rows(db, limit=limit, min_active_listings=min_active_listings)
-        return [BagIndexResponse(**row.__dict__) for row in rows]
+        result = [BagIndexResponse(**row.__dict__) for row in rows]
+        await cache_set(cache_key, [r.model_dump() for r in result], ttl=300)
+        return result
 
     time_cutoff = datetime.utcnow() - timedelta(days=days)
     snapshots = (
@@ -253,13 +266,24 @@ async def recompute_bag_index(
         if persist
         else compute_bag_index_rows(db, limit=limit, min_active_listings=min_active_listings)
     )
+    # Invalidate cached bag-index entries so next read is fresh
+    await cache_delete(
+        f"bagdrop:v1:bag-index:{limit}:{min_active_listings}",
+        f"bagdrop:v1:bag-index:20:2",
+    )
     return [BagIndexResponse(**row.__dict__) for row in rows]
 
 
 @router.get("/api/intelligence/brief", response_model=IntelligenceBriefResponse)
 async def get_intelligence_brief(db: Session = Depends(get_db)):
     """Combined daily intelligence payload for owned BagDrop editorial surfaces."""
-    return _build_intelligence_brief(db)
+    cache_key = "bagdrop:v1:intelligence-brief"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+    result = _build_intelligence_brief(db)
+    await cache_set(cache_key, result.model_dump(), ttl=300)
+    return result
 
 
 @router.get("/api/opportunities/arbitrage", response_model=List[ArbitrageOpportunityResponse])
@@ -271,13 +295,19 @@ async def get_arbitrage_opportunities(
     db: Session = Depends(get_db),
 ):
     """Surface listings materially below the live market average for the same brand/model."""
-    return _build_arbitrage_opportunities(
+    cache_key = f"bagdrop:v1:arbitrage:{limit}:{min_market_listings}:{min_platforms}:{min_gap_pct}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+    result = _build_arbitrage_opportunities(
         db,
         limit=limit,
         min_market_listings=min_market_listings,
         min_platforms=min_platforms,
         min_gap_pct=min_gap_pct,
     )
+    await cache_set(cache_key, [r.model_dump() for r in result], ttl=300)
+    return result
 
 
 @router.get("/api/opportunities/new-drops", response_model=List[NewDropOpportunityResponse])
@@ -288,4 +318,10 @@ async def get_new_drop_opportunities(
     db: Session = Depends(get_db),
 ):
     """High-signal new drops ranked by freshness, markdown, and market context."""
-    return _build_new_drop_opportunities(db, hours=hours, limit=limit, min_significance=min_significance)
+    cache_key = f"bagdrop:v1:new-drops:{hours}:{limit}:{min_significance}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+    result = _build_new_drop_opportunities(db, hours=hours, limit=limit, min_significance=min_significance)
+    await cache_set(cache_key, [r.model_dump() for r in result], ttl=300)
+    return result

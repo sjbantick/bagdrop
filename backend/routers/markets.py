@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
+from cache import cache_get, cache_set
 from database import get_db
 from deps import _public_listing_condition, _public_listing_cutoff, _round_float
 from models import Listing
@@ -109,6 +110,11 @@ async def get_featured_markets(
     db: Session = Depends(get_db),
 ):
     """Get high-signal brand/model markets to surface on the homepage."""
+    cache_key = f"bagdrop:v1:markets-featured:{limit}:{min_listings}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     listing_count = func.count(Listing.id)
     lowest_price = func.min(Listing.current_price)
     average_drop_pct = func.avg(Listing.drop_pct)
@@ -131,7 +137,7 @@ async def get_featured_markets(
         .all()
     )
 
-    return [
+    result = [
         FeaturedMarketResponse(
             brand=row.brand,
             model=row.model,
@@ -143,6 +149,8 @@ async def get_featured_markets(
         )
         for row in rows
     ]
+    await cache_set(cache_key, [r.model_dump() for r in result], ttl=300)
+    return result
 
 
 @router.get("/api/markets/{brand_slug}/{model_slug}/velocity", response_model=MarketVelocityResponse)
