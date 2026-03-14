@@ -11,11 +11,14 @@ from database import get_db
 from deps import _public_listing_condition, _public_listing_cutoff, _round_float
 from models import Listing, PriceHistory
 from schemas import (
+    CrossPlatformCompareResponse,
+    CrossPlatformSummaryResponse,
     FeaturedMarketResponse,
     MarketResponse,
     MarketStatsResponse,
     MarketVelocityResponse,
     PlatformBreakdownResponse,
+    PlatformCompareResponse,
     PriceTrendResponse,
     PriceTrendPointResponse,
     ListingResponse,
@@ -256,6 +259,109 @@ async def get_market_price_trend(
         trend=[p.model_dump() for p in trend_points],
     )
     await cache_set(cache_key, result.model_dump(), ttl=600)
+    return result
+
+
+@router.get("/api/markets/{brand_slug}/{model_slug}/compare", response_model=CrossPlatformCompareResponse)
+async def get_market_cross_platform_compare(
+    brand_slug: str,
+    model_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Cross-platform price comparison for a brand/model market."""
+    cache_key = f"bagdrop:v1:compare:{brand_slug}:{model_slug}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    resolved = _resolve_market(db, brand_slug, model_slug)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Market not found")
+    brand, model = resolved
+
+    # Per-platform aggregates
+    platform_rows = (
+        db.query(
+            Listing.platform.label("platform"),
+            func.count(Listing.id).label("listing_count"),
+            func.min(Listing.current_price).label("lowest_price"),
+            func.avg(Listing.current_price).label("average_price"),
+            func.max(Listing.drop_pct).label("best_drop_pct"),
+        )
+        .filter(_public_listing_condition(Listing.brand == brand, Listing.model == model))
+        .group_by(Listing.platform)
+        .all()
+    )
+
+    if not platform_rows:
+        raise HTTPException(status_code=404, detail="No active listings found for this market")
+
+    # Cross-platform average price for value_score calculation
+    cross_platform_avg = (
+        db.query(func.avg(Listing.current_price))
+        .filter(_public_listing_condition(Listing.brand == brand, Listing.model == model))
+        .scalar()
+    )
+    cross_platform_avg = float(cross_platform_avg) if cross_platform_avg else 0
+
+    # Build per-platform responses with value_score
+    platforms: list[PlatformCompareResponse] = []
+    for row in platform_rows:
+        avg_price = float(row.average_price) if row.average_price else 0
+        if cross_platform_avg > 0 and avg_price > 0:
+            # How much cheaper (%) this platform is vs the cross-platform average
+            cheaper_pct = ((cross_platform_avg - avg_price) / cross_platform_avg) * 100
+            # Clamp to 0-100
+            value_score = round(max(0.0, min(100.0, cheaper_pct * 2 + 50)), 1)
+        else:
+            value_score = 50.0  # neutral when data is missing
+
+        platforms.append(PlatformCompareResponse(
+            platform=row.platform,
+            listing_count=row.listing_count,
+            lowest_price=_round_float(row.lowest_price, 0),
+            average_price=_round_float(row.average_price, 0),
+            best_drop_pct=_round_float(row.best_drop_pct),
+            value_score=value_score,
+        ))
+
+    # Sort by value_score descending (best deals first)
+    platforms.sort(key=lambda p: p.value_score, reverse=True)
+
+    # Summary stats
+    total_listings = sum(p.listing_count for p in platforms)
+    overall_lowest_price = min((p.lowest_price for p in platforms if p.lowest_price is not None), default=None)
+    overall_lowest_platform = next(
+        (p.platform for p in platforms if p.lowest_price == overall_lowest_price),
+        None,
+    ) if overall_lowest_price is not None else None
+
+    avg_prices = [p.average_price for p in platforms if p.average_price is not None]
+    if len(avg_prices) >= 2:
+        price_spread = _round_float(max(avg_prices) - min(avg_prices), 0)
+        overall_avg = sum(avg_prices) / len(avg_prices)
+        price_spread_pct = _round_float((float(price_spread or 0) / overall_avg) * 100) if overall_avg > 0 else None
+    else:
+        price_spread = None
+        price_spread_pct = None
+
+    best_value_platform = platforms[0].platform if platforms else None
+
+    result = CrossPlatformCompareResponse(
+        brand=brand,
+        model=model,
+        canonical_path=market_path(brand, model),
+        summary=CrossPlatformSummaryResponse(
+            total_listings=total_listings,
+            overall_lowest_price=overall_lowest_price,
+            overall_lowest_price_platform=overall_lowest_platform,
+            price_spread=price_spread,
+            price_spread_pct=price_spread_pct,
+            best_value_platform=best_value_platform,
+        ),
+        platforms=platforms,
+    )
+    await cache_set(cache_key, result.model_dump(), ttl=300)
     return result
 
 

@@ -4,6 +4,7 @@ import Header from '@/components/Header'
 import ListingCard from '@/components/ListingCard'
 import MarketPriceTrend from '@/components/MarketPriceTrend'
 import WatchMarketCard from '@/components/WatchMarketCard'
+import PlatformCompare from '@/components/PlatformCompare'
 import StructuredData from '@/components/StructuredData'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatPercent, platformLabel, titleCase } from '@/lib/format'
@@ -28,6 +29,14 @@ async function getVelocity(brand, model) {
 async function getPriceTrend(brand, model) {
   try {
     return await fetchApi(`/api/markets/${brand}/${model}/price-trend`)
+  } catch {
+    return null
+  }
+}
+
+async function getComparison(brand, model) {
+  try {
+    return await fetchApi(`/api/markets/${brand}/${model}/compare`)
   } catch {
     return null
   }
@@ -80,9 +89,10 @@ export default async function MarketPage({ params, searchParams }) {
     notFound()
   }
 
-  const [velocity, priceTrend] = await Promise.all([
+  const [velocity, priceTrend, comparison] = await Promise.all([
     getVelocity(params.brand, params.model),
     getPriceTrend(params.brand, params.model),
+    getComparison(params.brand, params.model),
   ])
 
   const displayModel = titleCase(market.model)
@@ -171,6 +181,10 @@ export default async function MarketPage({ params, searchParams }) {
             </div>
           </div>
         </section>
+
+        {comparison && comparison.platforms && comparison.platforms.length >= 2 && (
+          <PlatformCompare comparison={comparison} />
+        )}
 
         <section className="mt-8 grid grid-cols-1 gap-8 xl:grid-cols-[0.75fr_1.25fr]">
           <div className="rounded-2xl border border-stone-200 bg-[#f7f1e8] p-5 shadow-[0_10px_30px_rgba(194,168,140,0.08)]">

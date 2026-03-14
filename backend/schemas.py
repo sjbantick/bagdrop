@@ -314,3 +314,29 @@ class WeekSummary(BaseModel):
     week_label: str
     listing_count: int
     avg_drop_pct: Optional[float]
+
+
+class PlatformCompareResponse(BaseModel):
+    platform: str
+    listing_count: int
+    lowest_price: Optional[float]
+    average_price: Optional[float]
+    best_drop_pct: Optional[float]
+    value_score: float  # 0-100, higher = better deal vs cross-platform avg
+
+
+class CrossPlatformSummaryResponse(BaseModel):
+    total_listings: int
+    overall_lowest_price: Optional[float]
+    overall_lowest_price_platform: Optional[str]
+    price_spread: Optional[float]  # highest avg - lowest avg across platforms
+    price_spread_pct: Optional[float]  # spread as % of overall average
+    best_value_platform: Optional[str]
+
+
+class CrossPlatformCompareResponse(BaseModel):
+    brand: str
+    model: str
+    canonical_path: str
+    summary: CrossPlatformSummaryResponse
+    platforms: List[PlatformCompareResponse]
