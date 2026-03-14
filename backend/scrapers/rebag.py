@@ -366,9 +366,13 @@ class RebagScraper(BaseScraper):
             return None
 
         body_html = product.get("body_html", "")
-        original_price = self._parse_retail_price(body_html)
-        if not original_price or original_price <= current_price:
-            return None
+        # Rebag only has "Estimated Retail Price" (new retail from years ago), not the
+        # listing's prior asking price. Passing it as original_price inflates drop_pct to
+        # 50-90% for every listing regardless of whether the price actually dropped on platform.
+        # We skip retail-based filtering and let price history track real platform drops.
+        retail_price = self._parse_retail_price(body_html)
+        if not retail_price:
+            return None  # Skip if no retail price (these are usually non-bag accessories)
 
         vendor = product.get("vendor", "Unknown")
         handle = product.get("handle", "")
@@ -390,7 +394,8 @@ class RebagScraper(BaseScraper):
             "model": model,
             "url": listing_url,
             "current_price": current_price,
-            "original_price": original_price,
+            # No original_price: Rebag has no compare_at_price. We use current_price as
+            # the baseline so future scrapes detect real platform price drops via history.
             "condition": condition,
             "color": color,
             "photo_url": photo_url,

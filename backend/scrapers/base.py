@@ -287,19 +287,24 @@ class BaseScraper(ABC):
 
         brand = self.normalize_brand(brand)
         model = self.normalize_model(model)
-        original_price = original_price or current_price
-        # Store as positive percentage drop (10.5 = 10.5% off)
-        drop_amount = original_price - current_price
-        drop_pct = (drop_amount / original_price * 100) if original_price > 0 else 0
 
         if existing:
             # Capture old price before update
             old_price = existing.current_price
 
+            # Use caller-supplied original_price when provided (e.g. Fashionphile compare_at_price).
+            # Otherwise fall back to the stored original so we track real platform drops over time
+            # (prevents new-retail-vs-resale comparisons inflating drop_pct for Rebag etc.)
+            effective_original = original_price or existing.original_price or current_price
+            drop_amount = effective_original - current_price
+            drop_pct = (drop_amount / effective_original * 100) if effective_original > 0 else 0
+
             # Update existing listing
             existing.current_price = current_price
             existing.drop_amount = drop_amount
-            existing.drop_pct = drop_pct
+            existing.drop_pct = drop_pct if drop_pct > 0 else None
+            if original_price is not None:
+                existing.original_price = original_price
             existing.last_seen = datetime.utcnow()
             existing.last_price_check = datetime.utcnow()
             existing.is_active = True
@@ -322,7 +327,11 @@ class BaseScraper(ABC):
                 raise
             return False
         else:
-            # Create new listing
+            # Create new listing — original_price defaults to current_price if not provided
+            # so that future price drops are tracked relative to the first observed price
+            stored_original = original_price or current_price
+            new_drop_amount = stored_original - current_price
+            new_drop_pct = (new_drop_amount / stored_original * 100) if stored_original > 0 and new_drop_amount > 0 else None
             listing = Listing(
                 id=listing_id,
                 platform=self.platform.value,
@@ -335,9 +344,9 @@ class BaseScraper(ABC):
                 hardware=hardware,
                 condition=condition,
                 current_price=current_price,
-                original_price=original_price,
-                drop_amount=drop_amount,
-                drop_pct=drop_pct,
+                original_price=stored_original,
+                drop_amount=new_drop_amount if new_drop_amount > 0 else None,
+                drop_pct=new_drop_pct,
                 description=description,
                 photo_url=photo_url,
             )
@@ -348,8 +357,8 @@ class BaseScraper(ABC):
                 listing_id=listing_id,
                 platform=self.platform.value,
                 price=current_price,
-                original_price=original_price,
-                drop_pct=drop_pct,
+                original_price=stored_original,
+                drop_pct=new_drop_pct,
             )
             self.db.add(price_history)
             try:
