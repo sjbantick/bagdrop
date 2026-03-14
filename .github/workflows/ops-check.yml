@@ -36,6 +36,10 @@ jobs:
           BAGDROP_OPS_URL: ${{ secrets.BAGDROP_OPS_URL }}
           BAGDROP_REQUIRE_CLICKS: ${{ vars.BAGDROP_REQUIRE_CLICKS }}
         run: |
+          if [ -z "${BAGDROP_OPS_URL}" ]; then
+            echo "BAGDROP_OPS_URL is not configured; skipping."
+            exit 0
+          fi
           if [ "${BAGDROP_REQUIRE_CLICKS}" = "true" ]; then
             python scripts/check_ops.py --url "${BAGDROP_OPS_URL}" --require-clicks
           else

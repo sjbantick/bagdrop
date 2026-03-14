@@ -270,3 +270,27 @@ class AdminHydrationResponse(BaseModel):
     listings_found: int
     listings_new: int
     listings_updated: int
+
+
+class WeeklyTopBrand(BaseModel):
+    brand: str
+    listing_count: int
+    avg_drop_pct: Optional[float]
+
+
+class WeeklyDropsResponse(BaseModel):
+    week_start: str  # ISO date string YYYY-MM-DD (Monday)
+    week_end: str    # ISO date string YYYY-MM-DD (Sunday)
+    week_label: str  # e.g. "March 10–16, 2026"
+    listing_count: int
+    avg_drop_pct: Optional[float]
+    top_brands: List[WeeklyTopBrand]
+    listings: List[ListingResponse]
+
+
+class WeekSummary(BaseModel):
+    week_start: str
+    week_end: str
+    week_label: str
+    listing_count: int
+    avg_drop_pct: Optional[float]

@@ -1,8 +1,8 @@
 """Intelligence endpoints: stats, bag index, arbitrage, new drops, brief."""
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,9 @@ from schemas import (
     IntelligenceBriefResponse,
     ListingResponse,
     NewDropOpportunityResponse,
+    WeeklyDropsResponse,
+    WeeklyTopBrand,
+    WeekSummary,
 )
 from utils import market_path
 
@@ -324,4 +327,143 @@ async def get_new_drop_opportunities(
         return cached
     result = _build_new_drop_opportunities(db, hours=hours, limit=limit, min_significance=min_significance)
     await cache_set(cache_key, [r.model_dump() for r in result], ttl=300)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Weekly editorial pages
+# ---------------------------------------------------------------------------
+
+def _week_bounds(date_str: str):
+    """Return (monday, sunday) datetime bounds for the ISO week containing date_str."""
+    try:
+        d = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date — use YYYY-MM-DD")
+    monday = d - timedelta(days=d.weekday())  # ISO Monday
+    sunday = monday + timedelta(days=6)
+    week_start = datetime(monday.year, monday.month, monday.day, 0, 0, 0)
+    week_end = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59)
+    return monday, sunday, week_start, week_end
+
+
+def _week_label(monday: date, sunday: date) -> str:
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if monday.month == sunday.month:
+        return f"{month_names[monday.month - 1]} {monday.day}–{sunday.day}, {monday.year}"
+    return f"{month_names[monday.month - 1]} {monday.day} – {month_names[sunday.month - 1]} {sunday.day}, {monday.year}"
+
+
+@router.get("/api/intel/weekly-drops", response_model=List[WeekSummary])
+async def list_weekly_drops(
+    weeks: int = Query(12, ge=1, le=52),
+    db: Session = Depends(get_db),
+):
+    """Return metadata for the last N ISO weeks that have at least one active listing."""
+    today = date.today()
+    # Start from this week's Monday
+    current_monday = today - timedelta(days=today.weekday())
+    summaries = []
+    for i in range(weeks):
+        monday = current_monday - timedelta(weeks=i)
+        sunday = monday + timedelta(days=6)
+        week_start = datetime(monday.year, monday.month, monday.day, 0, 0, 0)
+        week_end = datetime(sunday.year, sunday.month, sunday.day, 23, 59, 59)
+
+        stats = (
+            db.query(
+                func.count(Listing.id).label("cnt"),
+                func.avg(Listing.drop_pct).label("avg_drop"),
+            )
+            .filter(Listing.is_active == True)
+            .filter(Listing.first_seen >= week_start)
+            .filter(Listing.first_seen <= week_end)
+            .filter(Listing.drop_pct.isnot(None))
+            .one()
+        )
+        cnt = stats.cnt or 0
+        summaries.append(WeekSummary(
+            week_start=monday.isoformat(),
+            week_end=sunday.isoformat(),
+            week_label=_week_label(monday, sunday),
+            listing_count=cnt,
+            avg_drop_pct=_round_float(stats.avg_drop) if stats.avg_drop else None,
+        ))
+    return summaries
+
+
+@router.get("/api/intel/weekly-drops/{date_str}", response_model=WeeklyDropsResponse)
+async def get_weekly_drops(
+    date_str: str,
+    limit: int = Query(20, ge=5, le=50),
+    db: Session = Depends(get_db),
+):
+    """Top drops for the ISO week containing date_str. Cached 1 hour for past weeks."""
+    monday, sunday, week_start, week_end = _week_bounds(date_str)
+    cache_key = f"bagdrop:v1:weekly-drops:{monday.isoformat()}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    listings = (
+        db.query(Listing)
+        .filter(Listing.is_active == True)
+        .filter(Listing.first_seen >= week_start)
+        .filter(Listing.first_seen <= week_end)
+        .filter(Listing.drop_pct.isnot(None))
+        .order_by(desc(Listing.drop_pct), desc(Listing.drop_amount))
+        .limit(limit)
+        .all()
+    )
+
+    # Brand summary
+    brand_rows = (
+        db.query(
+            Listing.brand,
+            func.count(Listing.id).label("cnt"),
+            func.avg(Listing.drop_pct).label("avg_drop"),
+        )
+        .filter(Listing.is_active == True)
+        .filter(Listing.first_seen >= week_start)
+        .filter(Listing.first_seen <= week_end)
+        .filter(Listing.drop_pct.isnot(None))
+        .group_by(Listing.brand)
+        .order_by(desc(func.count(Listing.id)))
+        .limit(5)
+        .all()
+    )
+
+    total_stats = (
+        db.query(
+            func.count(Listing.id).label("cnt"),
+            func.avg(Listing.drop_pct).label("avg_drop"),
+        )
+        .filter(Listing.is_active == True)
+        .filter(Listing.first_seen >= week_start)
+        .filter(Listing.first_seen <= week_end)
+        .filter(Listing.drop_pct.isnot(None))
+        .one()
+    )
+
+    result = WeeklyDropsResponse(
+        week_start=monday.isoformat(),
+        week_end=sunday.isoformat(),
+        week_label=_week_label(monday, sunday),
+        listing_count=total_stats.cnt or 0,
+        avg_drop_pct=_round_float(total_stats.avg_drop) if total_stats.avg_drop else None,
+        top_brands=[
+            WeeklyTopBrand(
+                brand=r.brand,
+                listing_count=r.cnt,
+                avg_drop_pct=_round_float(r.avg_drop),
+            )
+            for r in brand_rows
+        ],
+        listings=[ListingResponse.model_validate(l) for l in listings],
+    )
+
+    # Cache past weeks for 1 hour; current week only 5 min
+    ttl = 3600 if sunday < date.today() else 300
+    await cache_set(cache_key, result.model_dump(), ttl=ttl)
     return result
