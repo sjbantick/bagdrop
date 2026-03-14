@@ -2,7 +2,7 @@
 import re
 from datetime import datetime, timedelta
 from typing import List, Optional
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -36,6 +36,15 @@ def _render_affiliate_template(value: str, replacements: Optional[dict] = None) 
         return str(replacements.get(match.group(1), ""))
 
     return re.sub(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", replace, value)
+
+
+def _affiliate_url_template_for_platform(platform: str) -> str:
+    return {
+        "realreal": settings.realreal_affiliate_url_template,
+        "vestiaire": settings.vestiaire_affiliate_url_template,
+        "fashionphile": settings.fashionphile_affiliate_url_template,
+        "rebag": settings.rebag_affiliate_url_template,
+    }.get(platform, "")
 
 
 def _affiliate_query_for_platform(
@@ -84,13 +93,21 @@ def _build_outbound_target_url(listing: Listing, surface: str, context: Optional
     if context:
         query["utm_term"] = context
 
-    return urlunsplit((
+    destination = urlunsplit((
         split.scheme,
         split.netloc,
         split.path,
         urlencode(query, doseq=True),
         split.fragment,
     ))
+
+    # If a full redirect-URL template is configured for this platform, wrap the
+    # destination URL inside it (e.g. ShareASale, Rakuten, CJ, Impact deep links).
+    url_template = _affiliate_url_template_for_platform(listing.platform)
+    if url_template:
+        return url_template.replace("{{url}}", quote(destination, safe=""))
+
+    return destination
 
 
 # ---------------------------------------------------------------------------

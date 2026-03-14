@@ -24,10 +24,20 @@ class Settings(BaseSettings):
     listing_report_dedupe_hours: int = 24
     listing_report_ip_daily_limit: int = 10
     outbound_utm_source: str = "bagdrop"
+    # Affiliate: query-param append (legacy, used if url_template is not set)
     realreal_affiliate_query: str = ""
     vestiaire_affiliate_query: str = ""
     fashionphile_affiliate_query: str = ""
     rebag_affiliate_query: str = ""
+    # Affiliate: full redirect-URL templates ({{url}} = encoded destination URL with UTMs)
+    # ShareASale example: https://www.shareasale.com/r.cfm?u=PUB_ID&m=MERCHANT_ID&urllink={{url}}
+    # Rakuten example:    https://click.linksynergy.com/deeplink?id=PUB_ID&mid=MID&murl={{url}}
+    # CJ example:         https://www.dpbolvw.net/click-PUB_ID-MERCHANT_ID?url={{url}}
+    # Impact example:     https://click.impactradius.com/c/PUB_ID/...?u={{url}}
+    realreal_affiliate_url_template: str = ""
+    vestiaire_affiliate_url_template: str = ""
+    fashionphile_affiliate_url_template: str = ""
+    rebag_affiliate_url_template: str = ""
     rebag_priority_handles: str = ""
     watch_token_secret: str = "bagdrop-dev-watch-secret"
     alert_from_email: str = ""
