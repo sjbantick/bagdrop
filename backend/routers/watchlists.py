@@ -39,6 +39,7 @@ async def subscribe_to_watchlist(
     brand = (payload.brand or "").strip()
     model = (payload.model or "").strip()
     source = (payload.source or "unknown").strip() or "unknown"
+    target_price = payload.target_price
     email = _normalize_watch_email(payload.email)
 
     if not brand or not model:
@@ -62,6 +63,7 @@ async def subscribe_to_watchlist(
         existing.brand = brand
         existing.model = model
         existing.source = source
+        existing.target_price = target_price
         existing.is_active = True
         db.commit()
         db.refresh(existing)
@@ -73,6 +75,7 @@ async def subscribe_to_watchlist(
             canonical_path=canonical_path,
             is_active=existing.is_active,
             already_subscribed=True,
+            target_price=existing.target_price,
             created_at=existing.created_at,
             unsubscribe_url=build_watch_unsubscribe_url(existing),
         )
@@ -84,6 +87,7 @@ async def subscribe_to_watchlist(
         brand_slug=brand_slug,
         model_slug=model_slug,
         source=source,
+        target_price=target_price,
         is_active=True,
     )
     db.add(subscription)
@@ -98,6 +102,7 @@ async def subscribe_to_watchlist(
         canonical_path=canonical_path,
         is_active=subscription.is_active,
         already_subscribed=False,
+        target_price=subscription.target_price,
         created_at=subscription.created_at,
         unsubscribe_url=build_watch_unsubscribe_url(subscription),
     )

@@ -125,6 +125,11 @@ def get_pending_watch_alerts(
             listings_query = listings_query.filter(~Listing.id.in_(seen_listing_ids))
 
         listings = listings_query.limit(effective_limit).all()
+
+        # If subscription has a target price, only include listings at or below it
+        if subscription.target_price is not None:
+            listings = [l for l in listings if l.current_price <= subscription.target_price]
+
         if listings:
             pending.append(PendingWatchAlert(subscription=subscription, listings=listings))
 
@@ -154,7 +159,10 @@ def render_watch_alert_email(subscription: WatchSubscription, listings: list[Lis
     market_label = f"{subscription.brand} {subscription.model}"
     count = len(listings)
     noun = "listing" if count == 1 else "listings"
-    subject = f"BagDrop: {count} new {market_label} {noun} just dropped"
+    if subscription.target_price is not None:
+        subject = f"BagDrop: {count} {market_label} {noun} under ${subscription.target_price:,.0f}"
+    else:
+        subject = f"BagDrop: {count} new {market_label} {noun} just dropped"
     market_url = f"{settings.public_app_url.rstrip('/')}{market_path(subscription.brand, subscription.model)}"
     unsubscribe_url = build_watch_unsubscribe_url(subscription)
 

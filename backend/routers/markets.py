@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 from cache import cache_get, cache_set
 from database import get_db
 from deps import _public_listing_condition, _public_listing_cutoff, _round_float
-from models import Listing
+from models import Listing, PriceHistory
 from schemas import (
     FeaturedMarketResponse,
     MarketResponse,
     MarketStatsResponse,
     MarketVelocityResponse,
     PlatformBreakdownResponse,
+    PriceTrendResponse,
+    PriceTrendPointResponse,
     ListingResponse,
 )
 from utils import market_path, slugify_text
@@ -165,6 +167,96 @@ async def get_market_velocity(
         raise HTTPException(status_code=404, detail="Market not found")
     brand, model = resolved
     return _build_market_velocity(db, brand, model)
+
+
+@router.get("/api/markets/{brand_slug}/{model_slug}/price-trend", response_model=PriceTrendResponse)
+async def get_market_price_trend(
+    brand_slug: str,
+    model_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Weekly aggregated price trend for a brand/model market (last 90 days)."""
+    cache_key = f"bagdrop:v1:price-trend:{brand_slug}:{model_slug}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    resolved = _resolve_market(db, brand_slug, model_slug)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Market not found")
+    brand, model = resolved
+
+    cutoff = datetime.utcnow() - timedelta(days=90)
+
+    week_start_expr = func.date_trunc("week", PriceHistory.detected_at)
+
+    rows = (
+        db.query(
+            week_start_expr.label("week_start"),
+            func.avg(PriceHistory.price).label("avg_price"),
+            func.min(PriceHistory.price).label("min_price"),
+            func.max(PriceHistory.price).label("max_price"),
+            func.count(PriceHistory.id).label("data_points"),
+        )
+        .join(Listing, Listing.id == PriceHistory.listing_id)
+        .filter(
+            and_(
+                Listing.brand == brand,
+                Listing.model == model,
+                PriceHistory.detected_at >= cutoff,
+            )
+        )
+        .group_by(week_start_expr)
+        .order_by(week_start_expr)
+        .all()
+    )
+
+    trend_points = [
+        PriceTrendPointResponse(
+            week_start=row.week_start.strftime("%Y-%m-%d"),
+            avg_price=_round_float(row.avg_price, 0),
+            min_price=_round_float(row.min_price, 0),
+            max_price=_round_float(row.max_price, 0),
+            data_points=row.data_points,
+        )
+        for row in rows
+    ]
+
+    data_points_total = sum(p.data_points for p in trend_points)
+
+    # Determine trend direction: compare avg of most recent 2 weeks vs prior 2 weeks
+    trend_direction = "stable"
+    trend_pct: Optional[float] = None
+    if len(trend_points) >= 4:
+        recent_avg = (trend_points[-1].avg_price + trend_points[-2].avg_price) / 2
+        prior_avg = (trend_points[-3].avg_price + trend_points[-4].avg_price) / 2
+        if prior_avg > 0:
+            trend_pct = _round_float(((recent_avg - prior_avg) / prior_avg) * 100)
+            if trend_pct <= -2:
+                trend_direction = "declining"
+            elif trend_pct >= 2:
+                trend_direction = "rising"
+    elif len(trend_points) >= 2:
+        recent_avg = trend_points[-1].avg_price
+        prior_avg = trend_points[0].avg_price
+        if prior_avg > 0:
+            trend_pct = _round_float(((recent_avg - prior_avg) / prior_avg) * 100)
+            if trend_pct <= -2:
+                trend_direction = "declining"
+            elif trend_pct >= 2:
+                trend_direction = "rising"
+
+    result = PriceTrendResponse(
+        brand=brand,
+        model=model,
+        canonical_path=market_path(brand, model),
+        trend_direction=trend_direction,
+        trend_pct=trend_pct,
+        data_points_total=data_points_total,
+        trend=[p.model_dump() for p in trend_points],
+    )
+    await cache_set(cache_key, result.model_dump(), ttl=600)
+    return result
 
 
 @router.get("/api/markets/{brand_slug}/{model_slug}", response_model=MarketResponse)

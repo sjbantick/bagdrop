@@ -5,6 +5,7 @@ import { getApiUrl } from '@/lib/api'
 
 export default function WatchMarketCard({ brand, model, listingCount }) {
   const [email, setEmail] = useState('')
+  const [targetPrice, setTargetPrice] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -26,6 +27,7 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
           brand,
           model,
           source: 'market_page',
+          target_price: targetPrice ? parseFloat(targetPrice) : null,
         }),
       })
 
@@ -41,6 +43,7 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
           : `Watching ${brand} ${model}. First alert loop is now captured.`
       )
       setEmail('')
+      setTargetPrice('')
     } catch (submitError) {
       setError(submitError.message || 'Subscription failed')
     } finally {
@@ -60,6 +63,19 @@ export default function WatchMarketCard({ brand, model, listingCount }) {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-3">
+        <label className="block">
+          <span className="text-xs text-stone-500">Alert me under $ (optional)</span>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={targetPrice}
+            onChange={(event) => setTargetPrice(event.target.value)}
+            placeholder="e.g. 3000"
+            className="mt-1 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 placeholder:text-stone-400 outline-none transition-colors focus:border-pink-300"
+          />
+        </label>
+
         <label className="block">
           <span className="sr-only">Email address</span>
           <input

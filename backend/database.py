@@ -22,6 +22,22 @@ def get_db() -> Session:
         db.close()
 
 
+def _run_migrations():
+    """Run lightweight schema migrations for columns added after initial create_all."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+
+    # Migration: add target_price to watch_subscriptions (Phase 1 price target alerts)
+    if "watch_subscriptions" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("watch_subscriptions")]
+        if "target_price" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE watch_subscriptions ADD COLUMN target_price FLOAT"))
+            print("Migration: added target_price column to watch_subscriptions")
+
+
 def init_db():
     """Initialize database tables"""
     Base.metadata.create_all(bind=engine)
+    _run_migrations()

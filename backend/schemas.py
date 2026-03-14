@@ -201,6 +201,7 @@ class WatchSubscriptionRequest(BaseModel):
     brand: str
     model: str
     source: str = "market_page"
+    target_price: Optional[float] = None
 
 
 class ListingReportRequest(BaseModel):
@@ -226,6 +227,7 @@ class WatchSubscriptionResponse(BaseModel):
     canonical_path: str
     is_active: bool
     already_subscribed: bool
+    target_price: Optional[float] = None
     created_at: datetime
     unsubscribe_url: str
 
@@ -270,6 +272,24 @@ class AdminHydrationResponse(BaseModel):
     listings_found: int
     listings_new: int
     listings_updated: int
+
+
+class PriceTrendPointResponse(BaseModel):
+    week_start: str  # ISO date YYYY-MM-DD
+    avg_price: float
+    min_price: float
+    max_price: float
+    data_points: int
+
+
+class PriceTrendResponse(BaseModel):
+    brand: str
+    model: str
+    canonical_path: str
+    trend_direction: str  # "declining", "rising", "stable"
+    trend_pct: Optional[float]  # % change recent vs prior
+    data_points_total: int
+    trend: list  # List of PriceTrendPointResponse dicts
 
 
 class WeeklyTopBrand(BaseModel):

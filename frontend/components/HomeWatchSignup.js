@@ -15,6 +15,7 @@ export default function HomeWatchSignup({ markets = [] }) {
   )
 
   const [email, setEmail] = useState('')
+  const [targetPrice, setTargetPrice] = useState('')
   const [marketValue, setMarketValue] = useState(optionLabel(fallbackMarket))
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -46,6 +47,7 @@ export default function HomeWatchSignup({ markets = [] }) {
           brand: selectedMarket.brand,
           model: titleCase(selectedMarket.model),
           source: 'homepage_hero',
+          target_price: targetPrice ? parseFloat(targetPrice) : null,
         }),
       })
 
@@ -60,6 +62,7 @@ export default function HomeWatchSignup({ markets = [] }) {
           : `Watching ${selectedMarket.brand} ${titleCase(selectedMarket.model)}.`
       )
       setEmail('')
+      setTargetPrice('')
     } catch (submitError) {
       setError(submitError.message || 'Subscription failed')
     } finally {
@@ -78,7 +81,7 @@ export default function HomeWatchSignup({ markets = [] }) {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+        <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-[1fr_1fr_0.7fr_auto]">
           <label className="block">
             <span className="sr-only">Market</span>
             <input
@@ -104,6 +107,19 @@ export default function HomeWatchSignup({ markets = [] }) {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
               required
+              className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 placeholder:text-stone-400 outline-none transition-colors focus:border-pink-300"
+            />
+          </label>
+
+          <label className="block">
+            <span className="sr-only">Target price</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={targetPrice}
+              onChange={(event) => setTargetPrice(event.target.value)}
+              placeholder="Alert under $"
               className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 placeholder:text-stone-400 outline-none transition-colors focus:border-pink-300"
             />
           </label>

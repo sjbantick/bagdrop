@@ -210,6 +210,7 @@ class WatchSubscription(Base):
     brand_slug = Column(String(120), nullable=False, index=True)
     model_slug = Column(String(120), nullable=False, index=True)
     source = Column(String(100), nullable=False, default="unknown")
+    target_price = Column(Float, nullable=True)
 
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import Header from '@/components/Header'
 import ListingCard from '@/components/ListingCard'
+import MarketPriceTrend from '@/components/MarketPriceTrend'
 import WatchMarketCard from '@/components/WatchMarketCard'
 import StructuredData from '@/components/StructuredData'
 import { fetchApi } from '@/lib/api'
@@ -19,6 +20,14 @@ async function getMarket(brand, model) {
 async function getVelocity(brand, model) {
   try {
     return await fetchApi(`/api/markets/${brand}/${model}/velocity`)
+  } catch {
+    return null
+  }
+}
+
+async function getPriceTrend(brand, model) {
+  try {
+    return await fetchApi(`/api/markets/${brand}/${model}/price-trend`)
   } catch {
     return null
   }
@@ -71,7 +80,10 @@ export default async function MarketPage({ params, searchParams }) {
     notFound()
   }
 
-  const velocity = await getVelocity(params.brand, params.model)
+  const [velocity, priceTrend] = await Promise.all([
+    getVelocity(params.brand, params.model),
+    getPriceTrend(params.brand, params.model),
+  ])
 
   const displayModel = titleCase(market.model)
   const velocityTone = velocity?.velocity_label === 'hot'
@@ -124,13 +136,12 @@ export default async function MarketPage({ params, searchParams }) {
         <section className="mt-6 rounded-3xl border border-stone-200 bg-[#f7f1e8] p-5 shadow-[0_12px_40px_rgba(206,182,150,0.10)] md:p-8">
           <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
-              <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-pink-500">Canonical Market Page</p>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.3em] text-pink-500">Market Overview</p>
               <h1 className="text-3xl font-semibold text-stone-900 sm:text-4xl md:text-5xl">
                 {market.brand} {displayModel}
               </h1>
               <p className="mt-4 text-base leading-8 text-stone-600 md:text-lg">
-                Live pricing across {market.platform_breakdown.length} platforms. This is the page BagDrop should rank
-                for search traffic and share socially instead of pointing people straight to marketplace inventory.
+                Live resale pricing across {market.platform_breakdown.length} platforms — updated hourly. Compare prices, track drops, and find the best deal.
               </p>
             </div>
 
@@ -205,6 +216,12 @@ export default async function MarketPage({ params, searchParams }) {
                   Velocity is inferred from recent first-seen activity across active listings. High scores mean fresh
                   supply is hitting this market quickly.
                 </p>
+              </div>
+            )}
+
+            {priceTrend && priceTrend.trend && priceTrend.trend.length >= 2 && (
+              <div className="mt-6">
+                <MarketPriceTrend trend={priceTrend} />
               </div>
             )}
 
