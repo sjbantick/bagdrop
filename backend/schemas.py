@@ -27,6 +27,12 @@ class ListingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaginatedListingsResponse(BaseModel):
+    items: List[ListingResponse]
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+
 class PriceHistoryResponse(BaseModel):
     price: float
     detected_at: datetime

@@ -27,6 +27,9 @@ export default function HomePageClient({
   const [newDrops, setNewDrops] = useState(initialNewDrops)
   const [stats, setStats] = useState(initialStats)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
   const [filters, setFilters] = useState({
     brand: '',
     model: '',
@@ -35,26 +38,47 @@ export default function HomePageClient({
     platform: '',
   })
 
+  const buildParams = (cursor = null) => {
+    const params = new URLSearchParams({
+      limit: 60,
+      sort_by: filters.sortBy,
+      min_drop_pct: filters.minDropPct,
+    })
+    if (filters.brand) params.append('brand', filters.brand)
+    if (filters.model) params.append('model', filters.model)
+    if (filters.platform) params.append('platform', filters.platform)
+    if (cursor) params.append('cursor', cursor)
+    return params
+  }
+
   const fetchListings = async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        limit: 60,
-        offset: 0,
-        sort_by: filters.sortBy,
-        min_drop_pct: filters.minDropPct,
-      })
-      if (filters.brand) params.append('brand', filters.brand)
-      if (filters.model) params.append('model', filters.model)
-      if (filters.platform) params.append('platform', filters.platform)
-
-      const response = await fetch(getApiUrl(`/api/listings?${params}`))
+      const response = await fetch(getApiUrl(`/api/listings?${buildParams()}`))
       const data = await response.json()
-      setListings(data)
+      setListings(data.items ?? data)
+      setNextCursor(data.next_cursor ?? null)
+      setHasMore(data.has_more ?? false)
     } catch (error) {
       console.error('Failed to fetch listings:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const response = await fetch(getApiUrl(`/api/listings?${buildParams(nextCursor)}`))
+      const data = await response.json()
+      setListings((prev) => [...prev, ...(data.items ?? [])])
+      setNextCursor(data.next_cursor ?? null)
+      setHasMore(data.has_more ?? false)
+    } catch (error) {
+      console.error('Failed to load more listings:', error)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -79,6 +103,8 @@ export default function HomePageClient({
     const hasActiveFilters = Boolean(filters.brand || filters.model || filters.platform || filters.minDropPct || filters.sortBy !== 'drop_pct')
     if (!hasActiveFilters) {
       setListings(initialListings)
+      setNextCursor(null)
+      setHasMore(false)
       setLoading(false)
       return
     }
@@ -203,6 +229,18 @@ export default function HomePageClient({
                 <ListingCard key={listing.id} listing={listing} />
               ))}
             </div>
+
+            {hasMore && (
+              <div className="mt-10 flex justify-center">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="rounded-full border border-stone-300 bg-white px-8 py-3 text-sm font-medium text-stone-700 transition-colors hover:border-pink-300 hover:text-pink-600 disabled:opacity-50"
+                >
+                  {loadingMore ? 'Loading...' : 'Load more drops'}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

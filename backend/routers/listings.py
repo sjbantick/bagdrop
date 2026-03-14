@@ -1,4 +1,6 @@
 """Listing feed, detail, outbound click tracking, and brand/model routes."""
+import base64
+import json
 import re
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -17,6 +19,7 @@ from schemas import (
     ListingReportRequest,
     ListingReportResponse,
     ListingResponse,
+    PaginatedListingsResponse,
     PriceHistoryResponse,
 )
 from utils import slugify_text
@@ -132,10 +135,26 @@ def _normalize_listing_report_notes(value: Optional[str]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Cursor helpers
+# ---------------------------------------------------------------------------
+
+def _encode_cursor(sort_by: str, sort_value, listing_id: str) -> str:
+    data = {"s": sort_by, "v": str(sort_value) if sort_value is not None else None, "id": listing_id}
+    return base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> Optional[dict]:
+    try:
+        return json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-@router.get("/api/listings", response_model=List[ListingResponse])
+@router.get("/api/listings", response_model=PaginatedListingsResponse)
 async def get_listings(
     db: Session = Depends(get_db),
     brand: Optional[str] = Query(None),
@@ -144,10 +163,20 @@ async def get_listings(
     min_drop_pct: Optional[float] = Query(0),
     max_drop_pct: Optional[float] = Query(100),
     sort_by: str = Query("drop_pct", pattern="^(drop_pct|drop_amount|current_price|last_seen)$"),
-    limit: int = Query(50, le=500),
-    offset: int = Query(0),
+    limit: int = Query(60, le=500),
+    cursor: Optional[str] = Query(None),
 ):
-    """Get listings with optional filters. Sorted by biggest drop by default."""
+    """Get listings with optional filters. Sorted by biggest drop by default.
+    Cursor-based pagination: pass `cursor` from previous response's `next_cursor`.
+    """
+    col_map = {
+        "drop_pct": Listing.drop_pct,
+        "drop_amount": Listing.drop_amount,
+        "current_price": Listing.current_price,
+        "last_seen": Listing.last_seen,
+    }
+    sort_col = col_map[sort_by]
+
     query = db.query(Listing).filter(Listing.is_active == True)
     query = query.filter(Listing.last_seen >= _public_listing_cutoff())
 
@@ -157,23 +186,49 @@ async def get_listings(
         query = query.filter(Listing.model.ilike(f"%{model}%"))
     if platform:
         query = query.filter(Listing.platform == platform)
+    if min_drop_pct is not None:
+        query = query.filter(Listing.drop_pct >= min_drop_pct)
+    if max_drop_pct is not None:
+        query = query.filter(Listing.drop_pct <= max_drop_pct)
 
-    if min_drop_pct is not None or max_drop_pct is not None:
-        if min_drop_pct is not None:
-            query = query.filter(Listing.drop_pct >= min_drop_pct)
-        if max_drop_pct is not None:
-            query = query.filter(Listing.drop_pct <= max_drop_pct)
+    # Apply keyset cursor: skip rows already seen based on (sort_col, id) tiebreak
+    cursor_data = _decode_cursor(cursor) if cursor else None
+    if cursor_data and cursor_data.get("s") == sort_by and cursor_data.get("v") is not None:
+        cursor_v = cursor_data["v"]
+        cursor_id = cursor_data["id"]
+        if sort_by == "last_seen":
+            from datetime import timezone
+            # last_seen cursor value is stored as ISO string
+            try:
+                cursor_dt = datetime.fromisoformat(cursor_v)
+            except ValueError:
+                cursor_dt = None
+            if cursor_dt:
+                query = query.filter(
+                    or_(sort_col < cursor_dt, and_(sort_col == cursor_dt, Listing.id < cursor_id))
+                )
+        else:
+            cursor_float = float(cursor_v)
+            query = query.filter(
+                or_(sort_col < cursor_float, and_(sort_col == cursor_float, Listing.id < cursor_id))
+            )
 
-    if sort_by == "drop_pct":
-        query = query.order_by(desc(Listing.drop_pct))
-    elif sort_by == "drop_amount":
-        query = query.order_by(desc(Listing.drop_amount))
-    elif sort_by == "current_price":
-        query = query.order_by(desc(Listing.current_price))
-    elif sort_by == "last_seen":
-        query = query.order_by(desc(Listing.last_seen))
+    query = query.order_by(desc(sort_col), desc(Listing.id))
 
-    return query.limit(limit).offset(offset).all()
+    # Fetch one extra to detect has_more without a separate COUNT query
+    rows = query.limit(limit + 1).all()
+    has_more = len(rows) > limit
+    items = rows[:limit]
+
+    next_cursor = None
+    if has_more and items:
+        last = items[-1]
+        sort_val = getattr(last, sort_by)
+        if sort_by == "last_seen" and sort_val is not None:
+            sort_val = sort_val.isoformat()
+        next_cursor = _encode_cursor(sort_by, sort_val, last.id)
+
+    return PaginatedListingsResponse(items=items, next_cursor=next_cursor, has_more=has_more)
 
 
 @router.get("/api/listings/{listing_id}", response_model=ListingResponse)
